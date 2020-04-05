@@ -16,14 +16,21 @@ sys_fork(void)
 int
 sys_exit(void)
 {
-  exit();
+  int status;
+  if(argint(0, &status) < 0)
+    return -1;
+  exit(status);
   return 0;  // not reached
 }
 
 int
 sys_wait(void)
 {
-  return wait();
+  int statpointer;
+  if(argint(0, &statpointer) < 0)
+    return -1;
+  int* status = (int*)statpointer;
+  return wait(status);
 }
 
 int
@@ -88,4 +95,11 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// return process memory size in bytes
+int
+sys_memsize(void)
+{
+  return myproc()->sz;
 }
