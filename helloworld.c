@@ -5,7 +5,14 @@
 int
 main(int argc, char *argv[])
 {
-  printf(1, "Hello World Xv6\n");
+  // printf(1, "Hello World Xv6\n");
+  // set_ps_priority(9);
+  policy(1);
+  for(int i=0; i< 100; i++){
+    printf(1, "%d\n", memsize());
+  }
+  
+
   exit(0);
   // test for ex.3 ass1
   // int status;

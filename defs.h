@@ -120,6 +120,8 @@ void            userinit(void);
 int             wait(int*);
 void            wakeup(void*);
 void            yield(void);
+void            set_ps_priority(int);
+long long       getminaccumulator(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -188,3 +190,5 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+int sched_type;

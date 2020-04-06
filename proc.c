@@ -12,6 +12,8 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+int sched_type =0;
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -89,6 +91,8 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
   p->exit_status = -1;
+  p->ps_priority = 5;
+  p->accumulator = getminaccumulator();
 
   release(&ptable.lock);
 
@@ -150,6 +154,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  p->accumulator = getminaccumulator(); //elad
 
   release(&ptable.lock);
 }
@@ -216,6 +221,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  np->accumulator = getminaccumulator; //elad
 
   release(&ptable.lock);
 
@@ -332,31 +338,89 @@ scheduler(void)
   
   for(;;){
     // Enable interrupts on this processor.
-    sti();
+  sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+    if(sched_type == 0){
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE)
+          continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-    }
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+      }
+    }else if(sched_type == 1){
+      long long curmin = -1;
+      struct proc* minproc = &ptable.proc[0];
+      struct proc* singlerunnable =0 ;
+      int numofrunnables=0;
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+          if(p->state != RUNNABLE && p->state !=RUNNING)
+            continue;
+          if(p->accumulator < curmin || curmin ==-1){
+            curmin = p->accumulator;
+            minproc = p;
+          }
+          if(p->state == RUNNABLE){
+            numofrunnables++;
+            singlerunnable = p;
+          }
+       }   
+       if(numofrunnables == 1){
+        singlerunnable->accumulator = 0;
+        minproc = singlerunnable;
+       }
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.     
+        c->proc = minproc;
+        switchuvm(minproc);
+        minproc->state = RUNNING; 
+
+        swtch(&(c->scheduler), minproc->context);
+        switchkvm();
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        minproc->accumulator += minproc->ps_priority;
+        c->proc = 0;
+      }
     release(&ptable.lock);
-
   }
+}
+
+long long 
+getminaccumulator(void){
+  long long curmin = -1;
+  struct proc *p;
+  int numofrunnables=0;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+          if(p->state != RUNNABLE && p->state !=RUNNING)
+            continue;
+          if(p->accumulator < curmin || curmin ==-1){
+            curmin = p->accumulator;
+          }
+          if(p->state == RUNNABLE){
+            numofrunnables++;
+          }
+  }
+  //elad 
+  if(numofrunnables == 1){
+    return 0;
+  }
+  return curmin;
 }
 
 // Enter scheduler.  Must hold only ptable.lock
@@ -391,6 +455,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+  myproc()->accumulator += myproc()->ps_priority //elad
   sched();
   release(&ptable.lock);
 }
@@ -464,8 +529,10 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
+      p->accumulator = getminaccumulator(); //elad
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -490,8 +557,10 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING){
         p->state = RUNNABLE;
+        p->accumulator = getminaccumulator();
+      }
       release(&ptable.lock);
       return 0;
     }
@@ -535,4 +604,12 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+void
+set_ps_priority(int priority)
+{
+  acquire(&ptable.lock);
+  myproc()->ps_priority = priority;
+  release(&ptable.lock);
 }

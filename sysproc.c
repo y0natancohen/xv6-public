@@ -101,5 +101,26 @@ sys_uptime(void)
 int
 sys_memsize(void)
 {
-  return myproc()->sz;
+  return sched_type;
+  // return myproc()->sz;
+}
+
+int 
+sys_set_ps_priority(void)
+{
+  int priority;
+  if(argint(0, &priority) < 0)
+    return -1;
+  set_ps_priority(priority);
+  return 0;
+}
+
+int 
+sys_policy(void)
+{
+  int schedtype;
+  if(argint(0, &schedtype) < 0)
+    return -1;
+  sched_type = schedtype;
+  return 0;
 }
