@@ -125,6 +125,7 @@ void            set_ps_priority(int);
 int       getminaccumulator(void);
 void            scheduler0(struct proc*, struct cpu*);
 void            scheduler1(struct proc*, struct cpu*);
+void            scheduler2(struct proc*, struct cpu*);
 
 
 // swtch.S

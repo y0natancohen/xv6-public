@@ -345,6 +345,8 @@ scheduler(void)
         scheduler0(p, c);
     }else if(sched_type == 1){
         scheduler1(p, c);
+    }else if(sched_type == 2){
+        scheduler2(p, c);
     }
     release(&ptable.lock);
   }
@@ -372,56 +374,49 @@ void scheduler0(struct proc *p, struct cpu *c){
 }
 
 void scheduler1(struct proc *p, struct cpu *c){
-    cprintf("inside scheduler1\n");
 
-    //    long long curmin = -1;
     int curmin = -1;
-    struct proc* minproc = &ptable.proc[0];
-    struct proc* singlerunnable = 0 ;
     int numofrunnables = 0;
+    struct proc* minproc = 0;
+    struct proc* singlerunnable = 0 ;
 
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE && p->state !=RUNNING)
-            continue;
-        cprintf("pid: %d, acc: %d\n", p->pid, p->accumulator);
-        if(p->accumulator < curmin || curmin ==-1){
-            curmin = p->accumulator;
-            minproc = p;
-            cprintf("minproc pid: %d, acc: %d\n", minproc->pid, minproc->accumulator);
-
-        }
         if(p->state == RUNNABLE){
             numofrunnables++;
             singlerunnable = p;
+
+            if(p->accumulator < curmin || curmin ==-1){
+                curmin = p->accumulator;
+            }
         }
     }
 
-    cprintf("minimum pid: %d, acc: %d\n", minproc->pid, minproc->accumulator);
-    cprintf("numofrunnables: %d\n", numofrunnables);
-    if(numofrunnables == 1){
-        singlerunnable->accumulator = 0;
-        minproc = singlerunnable;
-        cprintf("minimum single: %d, pid: %d, acc: %d\n", minproc->pid, minproc->accumulator);
+    if(numofrunnables == 0){
+        return;
+    } else if(numofrunnables == 1){
+        p = singlerunnable;
+        p->accumulator = 0;
+    } else{
+        p = minproc;
     }
     // Switch to chosen process.  It is the process's job
     // to release ptable.lock and then reacquire it
     // before jumping back to us.
-    c->proc = minproc;
-    cprintf("switching\n");
-    switchuvm(minproc);
-    cprintf("1\n");
-    minproc->state = RUNNING;
-    cprintf("2\n");
+    c->proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
 
-    swtch(&(c->scheduler), minproc->context);
-    cprintf("3\n");
+    swtch(&(c->scheduler), p->context);
     switchkvm();
-    cprintf("4\n");
 
+    c->proc->accumulator += c->proc->ps_priority;
     // Process is done running for now.
     // It should have changed its p->state before coming back.
     c->proc = 0;
-    minproc->accumulator += minproc->ps_priority;
+}
+
+void scheduler2(struct proc *p, struct cpu *c){
+    cprintf("inside scheduler2\n");
 }
 
 //long long getminaccumulator(void){
