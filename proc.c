@@ -154,7 +154,6 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
-//  p->accumulator = getminaccumulator(); //elad // it was just initialized in alllocproc
 
   release(&ptable.lock);
 }
@@ -419,10 +418,8 @@ void scheduler2(struct proc *p, struct cpu *c){
     cprintf("inside scheduler2\n");
 }
 
-//long long getminaccumulator(void){
-int getminaccumulator(void){
-//  long long curmin = -1;
-  int curmin = -1;
+long long getminaccumulator(void){
+  long long curmin = -1;
   struct proc *p;
   int numofrunnables=0;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -631,4 +628,17 @@ set_ps_priority(int priority)
   acquire(&ptable.lock);
   myproc()->ps_priority = priority;
   release(&ptable.lock);
+}
+
+int
+set_cfs_priority(int priority){
+  int res;
+  acquire(&ptable.lock);
+  if(priority >= 1 && priority<=3){
+    myproc()->cfs_priority = priority;
+    res = 0;
+  }
+  else res = -1; 
+  release(&ptable.lock);
+  return res;
 }

@@ -121,11 +121,11 @@ int             wait(int*);
 void            wakeup(void*);
 void            yield(void);
 void            set_ps_priority(int);
-//long long       getminaccumulator(void);
-int       getminaccumulator(void);
+long long       getminaccumulator(void);
 void            scheduler0(struct proc*, struct cpu*);
 void            scheduler1(struct proc*, struct cpu*);
 void            scheduler2(struct proc*, struct cpu*);
+int             set_cfs_priority(int priority);
 
 
 // swtch.S

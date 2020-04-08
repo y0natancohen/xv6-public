@@ -26,6 +26,7 @@ int uptime(void);
 int memsize(void);
 int set_ps_priority(int);
 int policy(int);
+int set_ps_priority(int);
 
 // ulib.c
 int stat(const char*, struct stat*);
