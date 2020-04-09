@@ -90,7 +90,6 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
-  p->exit_status = -1;
   p->ps_priority = 5;
   p->accumulator = getminaccumulator();
   p->rtime = 0;
@@ -307,7 +306,9 @@ wait(int* status)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        *status = p->exit_status; 
+        if(status!=null){
+          *status = p->exit_status;
+        } 
         release(&ptable.lock);
         return pid;
       }
