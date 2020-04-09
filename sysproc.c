@@ -128,6 +128,9 @@ sys_policy(void)
   int schedtype;
   if(argint(0, &schedtype) < 0)
     return -1;
-  sched_type = schedtype;
-  return 0;
+  if(schedtype>=0 && schedtype<=2){
+    sched_type = schedtype;
+    return 1;
+  }
+  return -1;
 }

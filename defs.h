@@ -125,7 +125,9 @@ long long       getminaccumulator(void);
 void            scheduler0(struct proc*, struct cpu*);
 void            scheduler1(struct proc*, struct cpu*);
 void            scheduler2(struct proc*, struct cpu*);
-int             set_cfs_priority(int priority);
+int             set_cfs_priority(int);
+void            update_processes_statistics(void);
+float           getDecayFactorByCFSPriority(int);
 
 
 // swtch.S

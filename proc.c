@@ -93,6 +93,10 @@ found:
   p->exit_status = -1;
   p->ps_priority = 5;
   p->accumulator = getminaccumulator();
+  p->rtime = 0;
+  p->retime = 0;
+  p->stime = 0;
+  p->cfs_priority=2; // default priority 2=> decay factor = 1
 
   release(&ptable.lock);
 
@@ -204,6 +208,7 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  np->cfs_priority = curproc->cfs_priority; // inherit cfs priority
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -220,7 +225,6 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  np->accumulator = getminaccumulator(); //elad
 
   release(&ptable.lock);
 
@@ -334,11 +338,9 @@ scheduler(void)
   struct proc *p = 0;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
   for(;;){
     // Enable interrupts on this processor.
   sti();
-
     acquire(&ptable.lock);
     if(sched_type == 0){
         scheduler0(p, c);
@@ -355,41 +357,37 @@ void scheduler0(struct proc *p, struct cpu *c){
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
         if(p->state != RUNNABLE)
             continue;
-
         // Switch to chosen process.  It is the process's job
         // to release ptable.lock and then reacquire it
         // before jumping back to us.
         c->proc = p;
         switchuvm(p);
         p->state = RUNNING;
-
         swtch(&(c->scheduler), p->context);
         switchkvm();
-
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
     }
 }
 
+// priority scheduling
+// notice cfs params are maintained in each tick at update_processes_statistics() 
 void scheduler1(struct proc *p, struct cpu *c){
-
     int curmin = -1;
     int numofrunnables = 0;
-    struct proc* minproc = 0;
+    struct proc* minproc=0;
     struct proc* singlerunnable = 0 ;
-
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
         if(p->state == RUNNABLE){
             numofrunnables++;
             singlerunnable = p;
-
             if(p->accumulator < curmin || curmin ==-1){
                 curmin = p->accumulator;
+                minproc = p; // fixed
             }
         }
     }
-
     if(numofrunnables == 0){
         return;
     } else if(numofrunnables == 1){
@@ -404,18 +402,64 @@ void scheduler1(struct proc *p, struct cpu *c){
     c->proc = p;
     switchuvm(p);
     p->state = RUNNING;
-
     swtch(&(c->scheduler), p->context);
     switchkvm();
-
     c->proc->accumulator += c->proc->ps_priority;
     // Process is done running for now.
     // It should have changed its p->state before coming back.
     c->proc = 0;
 }
 
+// cfs scheduling
+// notice p->accumulator is still maintained like in sched type 1 in case of policy switch
 void scheduler2(struct proc *p, struct cpu *c){
-    cprintf("inside scheduler2\n");
+    int currMinRatio = -1;
+    int numofrunnables = 0;
+    struct proc* minproc=0;
+    struct proc* singlerunnable = 0;
+    float procRatio, decayFactor;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state == RUNNABLE){
+            numofrunnables++;
+            decayFactor = getDecayFactorByCFSPriority(p->cfs_priority); 
+            procRatio = (p->rtime * decayFactor)/(p->rtime * (p->retime + p->stime));
+            if(procRatio < currMinRatio || currMinRatio ==-1){
+                currMinRatio = procRatio;
+                minproc = p;
+            }
+            singlerunnable = p;
+        }
+    }
+    if(numofrunnables == 0){
+        return;
+    } else if(numofrunnables == 1){
+        p = singlerunnable;
+        p->accumulator = 0;
+    } else{
+        p = minproc;
+    }
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    c->proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+    swtch(&(c->scheduler), p->context);
+    switchkvm();
+    c->proc->accumulator += c->proc->ps_priority;
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    c->proc = 0;
+}
+
+float 
+getDecayFactorByCFSPriority(int cfsPriority){
+  if(cfsPriority==1){
+    return 0.75;
+  }else if(cfsPriority==2){
+    return 1.0;
+  }
+  return 1.25;
 }
 
 long long getminaccumulator(void){
@@ -432,7 +476,6 @@ long long getminaccumulator(void){
             numofrunnables++;
           }
   }
-  //elad 
   if(numofrunnables == 1 || curmin == -1){
     return 0;
   }
@@ -472,6 +515,7 @@ yield(void)
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
 //  myproc()->accumulator += myproc()->ps_priority //elad   // jon // in yield prev state was running
+// todo- ask in forum
   sched();
   release(&ptable.lock);
 }
@@ -547,7 +591,7 @@ wakeup1(void *chan)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan){
       p->state = RUNNABLE;
-      p->accumulator = getminaccumulator(); //elad
+      p->accumulator = getminaccumulator();
     }
 }
 
@@ -641,4 +685,19 @@ set_cfs_priority(int priority){
   else res = -1; 
   release(&ptable.lock);
   return res;
+}
+
+void
+update_processes_statistics(void){
+  struct proc *p;
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+          if(p->state == RUNNABLE){
+            p->retime++;
+          }
+          else if(p->state == RUNNING){
+            p->rtime++;
+          }else if(p->state == SLEEPING){
+            p->stime++;
+          }
+  }
 }
