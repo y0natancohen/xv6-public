@@ -134,3 +134,12 @@ sys_policy(void)
   }
   return -1;
 }
+
+int
+sys_proc_info(void){
+  struct perf *performance;
+  if(argptr(0, (char **)&performance, sizeof (struct perf)) < 0)
+    return -1;
+  proc_info(performance);
+  return 0;
+}

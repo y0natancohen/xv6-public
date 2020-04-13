@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct perf;
 
 // bio.c
 void            binit(void);
@@ -128,6 +129,7 @@ void            scheduler2(struct proc*, struct cpu*);
 int             set_cfs_priority(int);
 void            update_processes_statistics(void);
 float           getDecayFactorByCFSPriority(int);
+void            proc_info(struct perf*);
 
 
 // swtch.S

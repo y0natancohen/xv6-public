@@ -423,7 +423,7 @@ void scheduler2(struct proc *p, struct cpu *c){
         if(p->state == RUNNABLE){
             numofrunnables++;
             decayFactor = getDecayFactorByCFSPriority(p->cfs_priority); 
-            procRatio = (p->rtime * decayFactor)/(p->rtime * (p->retime + p->stime));
+            procRatio = (p->rtime * decayFactor)/(p->rtime + (p->retime + p->stime));
             if(procRatio < currMinRatio || currMinRatio ==-1){
                 currMinRatio = procRatio;
                 minproc = p;
@@ -515,8 +515,7 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
-//  myproc()->accumulator += myproc()->ps_priority //elad   // jon // in yield prev state was running
-// todo- ask in forum
+  myproc()->accumulator += myproc()->ps_priority;
   sched();
   release(&ptable.lock);
 }
@@ -693,12 +692,20 @@ update_processes_statistics(void){
   struct proc *p;
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
           if(p->state == RUNNABLE){
-            p->retime++;
+            p->retime +=1;
           }
           else if(p->state == RUNNING){
-            p->rtime++;
+            p->rtime +=1;
           }else if(p->state == SLEEPING){
-            p->stime++;
+            p->stime +=1;
           }
   }
+}
+
+void
+proc_info(struct perf *performance){
+  performance->stime = myproc()->stime;
+  performance->rtime = myproc()->rtime;
+  performance->retime = myproc()->retime;
+  performance->ps_priority = myproc()->ps_priority;
 }
