@@ -341,7 +341,7 @@ scheduler(void)
   c->proc = 0;
   for(;;){
     // Enable interrupts on this processor.
-  sti();
+    sti();
     acquire(&ptable.lock);
     if(sched_type == 0){
         scheduler0(p, c);
@@ -393,7 +393,6 @@ void scheduler1(struct proc *p, struct cpu *c){
         return;
     } else if(numofrunnables == 1){
         p = singlerunnable;
-        p->accumulator = 0;
     } else{
         p = minproc;
     }
@@ -414,16 +413,19 @@ void scheduler1(struct proc *p, struct cpu *c){
 // cfs scheduling
 // notice p->accumulator is still maintained like in sched type 1 in case of policy switch
 void scheduler2(struct proc *p, struct cpu *c){
-    int currMinRatio = -1;
+    float currMinRatio = -1;
     int numofrunnables = 0;
     struct proc* minproc=0;
     struct proc* singlerunnable = 0;
+    int wtime;
     float procRatio, decayFactor;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
         if(p->state == RUNNABLE){
             numofrunnables++;
             decayFactor = getDecayFactorByCFSPriority(p->cfs_priority); 
-            procRatio = (p->rtime * decayFactor)/(p->rtime + (p->retime + p->stime));
+            wtime = p->retime + p->stime;
+
+            procRatio = ((float)p->rtime * decayFactor)/(float)(p->rtime + wtime);
             if(procRatio < currMinRatio || currMinRatio ==-1){
                 currMinRatio = procRatio;
                 minproc = p;
@@ -435,7 +437,6 @@ void scheduler2(struct proc *p, struct cpu *c){
         return;
     } else if(numofrunnables == 1){
         p = singlerunnable;
-        p->accumulator = 0;
     } else{
         p = minproc;
     }
@@ -690,16 +691,17 @@ set_cfs_priority(int priority){
 void
 update_processes_statistics(void){
   struct proc *p;
+  acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-          if(p->state == RUNNABLE){
-            p->retime +=1;
-          }
-          else if(p->state == RUNNING){
-            p->rtime +=1;
-          }else if(p->state == SLEEPING){
-            p->stime +=1;
-          }
+    if(p->state == RUNNABLE){
+      p->retime +=1;
+    }else if(p->state == RUNNING){
+      p->rtime +=1;
+    }else if(p->state == SLEEPING){
+      p->stime +=1;
+    }
   }
+  release(&ptable.lock);
 }
 
 void

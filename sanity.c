@@ -4,22 +4,24 @@
 
 
 void long_job(int pid){
-    int i = 20000;
-    for (int x=0;x<3;x++) {
+    int i = 5000;
+    for (int x=0;x<5;x++) {
         for (double j = 0; j < i; j += 0.01) {
-            double x = (x + 3.14 * 89.64) / 234.6543;
+            double x = (x + 1.23 * 4.56) / 7.89;
         }
-        sleep(3);
+        sleep(1);
     }
     struct perf perf1;
     proc_info(&perf1);
-    printf(1, "%d       %d       %d       %d       %d\n", pid, perf1.ps_priority, perf1.stime, perf1.retime, perf1.rtime);
+    float f = (float) perf1.retime / (float) perf1.rtime;
+    int percent = (int) (f*100);
+    printf(1, "%d       %d         %d       %d       %d       %d%\n",
+            pid, perf1.ps_priority, perf1.stime, perf1.retime, perf1.rtime, percent);
     exit(1);
 }
 
-int
-main(int argc, char *argv[]) {
-    printf(1, "PID  PS_PRIORITY  STIME  RETIME  RTIME\n");
+void sanity(){
+    printf(1, "PID  PS_PRIORITY  STIME  RETIME    RTIME    RE/R\n");
     if (fork() == 0) {
         set_cfs_priority(3);
         set_ps_priority(10);
@@ -42,6 +44,15 @@ main(int argc, char *argv[]) {
                 wait(&status1);
             }
         }
+    }
+}
+
+int
+main(int argc, char *argv[]) {
+    for (int x=0;x<3;x++) {
+        sanity();
+        printf(1, "\n");
+        sleep(1);
     }
     exit(0);
 }
