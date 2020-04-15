@@ -13,15 +13,13 @@ void long_job(int pid){
     }
     struct perf perf1;
     proc_info(&perf1);
-    float f = (float) perf1.retime / (float) perf1.rtime;
-    int percent = (int) (f*100);
-    printf(1, "%d       %d         %d       %d       %d       %d%\n",
-            pid, perf1.ps_priority, perf1.stime, perf1.retime, perf1.rtime, percent);
+    printf(1, "%d       %d         %d       %d       %d\n",
+            pid, perf1.ps_priority, perf1.stime, perf1.retime, perf1.rtime);
     exit(1);
 }
 
 void sanity(){
-    printf(1, "PID  PS_PRIORITY  STIME  RETIME    RTIME    RE/R\n");
+    printf(1, "PID  PS_PRIORITY  STIME  RETIME    RTIME\n");
     if (fork() == 0) {
         set_cfs_priority(3);
         set_ps_priority(10);
@@ -49,10 +47,6 @@ void sanity(){
 
 int
 main(int argc, char *argv[]) {
-    for (int x=0;x<3;x++) {
-        sanity();
-        printf(1, "\n");
-        sleep(1);
-    }
+    sanity();
     exit(0);
 }
