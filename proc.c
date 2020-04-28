@@ -12,8 +12,6 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
-int sched_type =0;
-
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -67,6 +65,19 @@ myproc(void) {
   return p;
 }
 
+
+
+
+int 
+allocpid(void) 
+{
+  int pid;
+  acquire(&ptable.lock);
+  pid = nextpid++;
+  release(&ptable.lock);
+  return pid;
+}
+
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
 // If found, change state to EMBRYO and initialize
@@ -89,15 +100,9 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
-  p->pid = nextpid++;
-  p->ps_priority = 5;
-  p->accumulator = getminaccumulator();
-  p->rtime = 0;
-  p->retime = 0;
-  p->stime = 0;
-  p->cfs_priority=2; // default priority 2=> decay factor = 1
-
   release(&ptable.lock);
+
+  p->pid = allocpid();
 
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
@@ -122,6 +127,9 @@ found:
 
   return p;
 }
+
+
+
 
 //PAGEBREAK: 32
 // Set up first user process.
@@ -207,7 +215,6 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
-  np->cfs_priority = curproc->cfs_priority; // inherit cfs priority
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -230,11 +237,11 @@ fork(void)
   return pid;
 }
 
-// Exit the current process. return exit status.
+// Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait() to find out it exited.
 void
-exit(int status)
+exit(void)
 {
   struct proc *curproc = myproc();
   struct proc *p;
@@ -272,8 +279,6 @@ exit(int status)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
-  // set exit status for parent
-  curproc->exit_status = status;
   sched();
   panic("zombie exit");
 }
@@ -281,7 +286,7 @@ exit(int status)
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
 int
-wait(int* status)
+wait(void)
 {
   struct proc *p;
   int havekids, pid;
@@ -306,9 +311,6 @@ wait(int* status)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        if(status!=null){
-          *status = p->exit_status;
-        } 
         release(&ptable.lock);
         return pid;
       }
@@ -336,152 +338,37 @@ wait(int* status)
 void
 scheduler(void)
 {
-  struct proc *p = 0;
+  struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
+  
   for(;;){
     // Enable interrupts on this processor.
     sti();
+
+    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    if(sched_type == 0){
-        scheduler0(p, c);
-    }else if(sched_type == 1){
-        scheduler1(p, c);
-    }else if(sched_type == 2){
-        scheduler2(p, c);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE)
+        continue;
+
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
     }
     release(&ptable.lock);
+
   }
-}
-
-void scheduler0(struct proc *p, struct cpu *c){
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE)
-            continue;
-        // Switch to chosen process.  It is the process's job
-        // to release ptable.lock and then reacquire it
-        // before jumping back to us.
-        c->proc = p;
-        switchuvm(p);
-        p->state = RUNNING;
-        swtch(&(c->scheduler), p->context);
-        switchkvm();
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-    }
-}
-
-// priority scheduling
-// notice cfs params are maintained in each tick at update_processes_statistics() 
-void scheduler1(struct proc *p, struct cpu *c){
-    int curmin = -1;
-    int numofrunnables = 0;
-    struct proc* minproc=0;
-    struct proc* singlerunnable = 0 ;
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state == RUNNABLE){
-            numofrunnables++;
-            singlerunnable = p;
-            if(p->accumulator < curmin || curmin ==-1){
-                curmin = p->accumulator;
-                minproc = p; // fixed
-            }
-        }
-    }
-    if(numofrunnables == 0){
-        return;
-    } else if(numofrunnables == 1){
-        p = singlerunnable;
-    } else{
-        p = minproc;
-    }
-    // Switch to chosen process.  It is the process's job
-    // to release ptable.lock and then reacquire it
-    // before jumping back to us.
-    c->proc = p;
-    switchuvm(p);
-    p->state = RUNNING;
-    swtch(&(c->scheduler), p->context);
-    switchkvm();
-    c->proc->accumulator += c->proc->ps_priority;
-    // Process is done running for now.
-    // It should have changed its p->state before coming back.
-    c->proc = 0;
-}
-
-// cfs scheduling
-// notice p->accumulator is still maintained like in sched type 1 in case of policy switch
-void scheduler2(struct proc *p, struct cpu *c){
-    float currMinRatio = -1;
-    int numofrunnables = 0;
-    struct proc* minproc=0;
-    struct proc* singlerunnable = 0;
-    int wtime;
-    float procRatio, decayFactor;
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state == RUNNABLE){
-            numofrunnables++;
-            decayFactor = getDecayFactorByCFSPriority(p->cfs_priority); 
-            wtime = p->retime + p->stime;
-
-            procRatio = ((float)p->rtime * decayFactor)/(float)(p->rtime + wtime);
-            if(procRatio < currMinRatio || currMinRatio ==-1){
-                currMinRatio = procRatio;
-                minproc = p;
-            }
-            singlerunnable = p;
-        }
-    }
-    if(numofrunnables == 0){
-        return;
-    } else if(numofrunnables == 1){
-        p = singlerunnable;
-    } else{
-        p = minproc;
-    }
-    // Switch to chosen process.  It is the process's job
-    // to release ptable.lock and then reacquire it
-    // before jumping back to us.
-    c->proc = p;
-    switchuvm(p);
-    p->state = RUNNING;
-    swtch(&(c->scheduler), p->context);
-    switchkvm();
-    c->proc->accumulator += c->proc->ps_priority;
-    // Process is done running for now.
-    // It should have changed its p->state before coming back.
-    c->proc = 0;
-}
-
-float 
-getDecayFactorByCFSPriority(int cfsPriority){
-  if(cfsPriority==1){
-    return 0.75;
-  }else if(cfsPriority==2){
-    return 1.0;
-  }
-  return 1.25;
-}
-
-long long getminaccumulator(void){
-  long long curmin = -1;
-  struct proc *p;
-  int numofrunnables=0;
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-          if(p->state != RUNNABLE && p->state !=RUNNING)
-            continue;
-          if(p->accumulator < curmin || curmin ==-1){
-            curmin = p->accumulator;
-          }
-          if(p->state == RUNNABLE){
-            numofrunnables++;
-          }
-  }
-  if(numofrunnables == 1 || curmin == -1){
-    return 0;
-  }
-  return curmin;
 }
 
 // Enter scheduler.  Must hold only ptable.lock
@@ -516,7 +403,6 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
-  myproc()->accumulator += myproc()->ps_priority;
   sched();
   release(&ptable.lock);
 }
@@ -590,10 +476,8 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan){
+    if(p->state == SLEEPING && p->chan == chan)
       p->state = RUNNABLE;
-      p->accumulator = getminaccumulator();
-    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -618,10 +502,8 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING){
+      if(p->state == SLEEPING)
         p->state = RUNNABLE;
-        p->accumulator = getminaccumulator(); // maybe not necessary but who cares
-      }
       release(&ptable.lock);
       return 0;
     }
@@ -665,49 +547,4 @@ procdump(void)
     }
     cprintf("\n");
   }
-}
-
-void
-set_ps_priority(int priority)
-{
-  acquire(&ptable.lock);
-  myproc()->ps_priority = priority;
-  release(&ptable.lock);
-}
-
-int
-set_cfs_priority(int priority){
-  int res;
-  acquire(&ptable.lock);
-  if(priority >= 1 && priority<=3){
-    myproc()->cfs_priority = priority;
-    res = 0;
-  }
-  else res = -1; 
-  release(&ptable.lock);
-  return res;
-}
-
-void
-update_processes_statistics(void){
-  struct proc *p;
-  acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->state == RUNNABLE){
-      p->retime +=1;
-    }else if(p->state == RUNNING){
-      p->rtime +=1;
-    }else if(p->state == SLEEPING){
-      p->stime +=1;
-    }
-  }
-  release(&ptable.lock);
-}
-
-void
-proc_info(struct perf *performance){
-  performance->stime = myproc()->stime;
-  performance->rtime = myproc()->rtime;
-  performance->retime = myproc()->retime;
-  performance->ps_priority = myproc()->ps_priority;
 }

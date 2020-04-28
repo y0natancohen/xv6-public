@@ -16,21 +16,14 @@ sys_fork(void)
 int
 sys_exit(void)
 {
-  int status;
-  if(argint(0, &status) < 0)
-    return -1;
-  exit(status);
+  exit();
   return 0;  // not reached
 }
 
 int
 sys_wait(void)
 {
-  int statpointer;
-  if(argint(0, &statpointer) < 0)
-    return -1;
-  int* status = (int*)statpointer;
-  return wait(status);
+  return wait();
 }
 
 int
@@ -95,51 +88,4 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
-}
-
-// return process memory size in bytes
-int
-sys_memsize(void)
-{
-   return myproc()->sz;
-}
-
-int 
-sys_set_ps_priority(void)
-{
-  int priority;
-  if(argint(0, &priority) < 0)
-    return -1;
-  set_ps_priority(priority);
-  return 0;
-}
-
-int 
-sys_set_cfs_priority(void){
-  int priority;
-  if(argint(0, &priority) < 0)
-    return -1;
-  return set_cfs_priority(priority);  
-}
-
-int 
-sys_policy(void)
-{
-  int schedtype;
-  if(argint(0, &schedtype) < 0)
-    return -1;
-  if(schedtype>=0 && schedtype<=2){
-    sched_type = schedtype;
-    return 1;
-  }
-  return -1;
-}
-
-int
-sys_proc_info(void){
-  struct perf *performance;
-  if(argptr(0, (char **)&performance, sizeof (struct perf)) < 0)
-    return -1;
-  proc_info(performance);
-  return 0;
 }
