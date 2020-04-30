@@ -33,6 +33,13 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+#define SIGNALS_SIZE 30
+
+#define SIG_DFL 0 /* default signal handler */
+#define SIG_IGN 1 /* ignore signal */
+#define SIGKILL 9
+#define SIGSTOP 17
+#define SIGCONT 19
 
 // Per-process state
 struct proc {
@@ -49,8 +56,16 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  uint pending_signals;
+  uint signal_mask;
+  struct sigaction* signal_handlers[SIGNALS_SIZE];
+  struct trapframe* user_trapframe_backup;
 };
 
+struct sigaction {
+  void (*sa_handler)(int);
+  uint sigmask; 
+};
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss

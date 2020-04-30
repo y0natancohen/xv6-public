@@ -89,3 +89,25 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int
+sys_sigprocmask(void){
+  int n;
+  if(argint(0, &n) < 0)
+    return -1;
+  uint newsigmask = (uint)n;
+  return sigprocmask(newsigmask);
+}
+
+int
+sys_sigaction(void){
+  int signum;
+  struct sigaction* act;
+  struct sigaction* oldact;
+  if(argint(0, &signum)<0
+    || argptr(1,(void*)&act,sizeof (struct sigaction))<0
+    || argptr(2,(void*)&oldact,sizeof (struct sigaction))<0)
+      return -1;
+  
+  return set_sigaction(signum, act , oldact);
+}

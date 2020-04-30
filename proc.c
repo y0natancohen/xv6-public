@@ -100,6 +100,8 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
+  // todo
+  // p->signal_handlers = 0; // setting default handler (SIG_DFL) for all signals
   release(&ptable.lock);
 
   p->pid = allocpid();
@@ -215,6 +217,10 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  for(int i=0; i< SIGNALS_SIZE; i++){
+    np->signal_handlers[i] = curproc->signal_handlers[i];
+  }
+  np->signal_mask = curproc->signal_mask;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -547,4 +553,32 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+// sets the proc's signal mask 
+uint
+sigprocmask(uint sigmask){
+  acquire(&ptable.lock);
+  uint oldmask = myproc()->signal_mask;
+  myproc()->signal_mask = sigmask;
+  release(&ptable.lock);
+  return oldmask;
+}
+
+int 
+set_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact){
+  if(signum==SIGKILL || signum==SIGSTOP) return -1;
+  acquire(&ptable.lock);
+  // fill current sig action data to user struct pointed by old act
+  if(oldact!=0){
+    oldact = myproc()->signal_handlers[signum];
+  }
+  // set the new sig action to the relevant signal
+  myproc()->signal_handlers[signum]= act;
+  release(&ptable.lock);
+  return 0;
+}
+
+void ignoreHandler(int signum){
+
 }
