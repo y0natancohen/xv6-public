@@ -58,7 +58,8 @@ struct proc {
   char name[16];               // Process name (debugging)
   uint pending_signals;
   uint signal_mask;
-  struct sigaction* signal_handlers[SIGNALS_SIZE];
+//  struct sigaction* signal_handlers[SIGNALS_SIZE];
+  struct sigaction* signal_handlers;
   struct trapframe* user_trapframe_backup;
 };
 

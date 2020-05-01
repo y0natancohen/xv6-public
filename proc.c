@@ -126,19 +126,14 @@ found:
   p->context->eip = (uint)forkret;
 
   // signals
+  p->signal_handlers = (struct sigaction*) kalloc();
+  // kalloc gives 4096, which is bigger then -
+  // sizeof(sigaction)*SIGNALS_SIZE == (4+4)*30 = 240
+
   for (int i=0; i<SIGNALS_SIZE; i++){
-      struct sigaction* signal_handler = p->signal_handlers[i];
-      // two lines just to avoid unused variable
-      int x = signal_handler->sigmask + 1;
-      x= x+1;
-//      signal_handler->sa_handler = 0;
-//      signal_handler->sigmask = 0;
-// todo actually allocate signal_handlers arr
-
+      p->signal_handlers[i].sa_handler = SIG_DFL;
+      p->signal_handlers[i].sigmask = 0;
   }
-  // todo
-  // p->signal_handlers = 0; // setting default handler (SIG_DFL) for all signals
-
 
     return p;
 }
@@ -584,13 +579,11 @@ set_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
   acquire(&ptable.lock);
   // fill current sig action data to user struct pointed by old act
   if(oldact!=0){
-    oldact = myproc()->signal_handlers[signum];
+    oldact = & myproc()->signal_handlers[signum];
   }
   // set the new sig action to the relevant signal
-  // todo is this bad?
-  struct sigaction* signal_handler = myproc()->signal_handlers[signum];
-  signal_handler->sigmask = act->sigmask;
-  signal_handler->sa_handler = act->sa_handler;
+    myproc()->signal_handlers[signum].sigmask = act->sigmask;
+    myproc()->signal_handlers[signum].sa_handler = act->sa_handler;
 
   release(&ptable.lock);
   return 0;
