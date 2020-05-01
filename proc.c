@@ -100,8 +100,6 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
-  // todo
-  // p->signal_handlers = 0; // setting default handler (SIG_DFL) for all signals
   release(&ptable.lock);
 
   p->pid = allocpid();
@@ -127,7 +125,22 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
-  return p;
+  // signals
+  for (int i=0; i<SIGNALS_SIZE; i++){
+      struct sigaction* signal_handler = p->signal_handlers[i];
+      // two lines just to avoid unused variable
+      int x = signal_handler->sigmask + 1;
+      x= x+1;
+//      signal_handler->sa_handler = 0;
+//      signal_handler->sigmask = 0;
+// todo actually allocate signal_handlers arr
+
+  }
+  // todo
+  // p->signal_handlers = 0; // setting default handler (SIG_DFL) for all signals
+
+
+    return p;
 }
 
 
@@ -574,7 +587,11 @@ set_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
     oldact = myproc()->signal_handlers[signum];
   }
   // set the new sig action to the relevant signal
-//todo  myproc()->signal_handlers[signum]= act;
+  // todo is this bad?
+  struct sigaction* signal_handler = myproc()->signal_handlers[signum];
+  signal_handler->sigmask = act->sigmask;
+  signal_handler->sa_handler = act->sa_handler;
+
   release(&ptable.lock);
   return 0;
 }
