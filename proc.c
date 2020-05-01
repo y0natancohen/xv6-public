@@ -365,7 +365,9 @@ scheduler(void)
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
-
+      handle_pending_signals(p); // if the process received sigstop, it will not be runnable anymore
+      if(p->state != RUNNABLE)
+        continue;
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -384,6 +386,32 @@ scheduler(void)
 
   }
 }
+
+void handle_pending_signals(struct proc* p){
+    uint signals = p->pending_signals;
+    uint mask = p->signal_mask;
+    uint active_signals = (~mask) & (signals);
+
+    uint one = 1;
+//    for (int i=0;i< sizeof(uint)*4; i++){
+    for (int i=0;i< 31; i++){
+        uint first = active_signals & one;
+        if(first > 0){
+            uint signum = i;
+            if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
+                // here we do all the default actions
+                do_default_action(signum, p);
+//          p->killed = 1;
+            } else if((int)p->signal_handlers[SIGKILL].sa_handler == SIG_IGN){
+                // ignore
+            } else {
+                p->signal_handlers[SIGKILL].sa_handler(signum);
+            }
+        }
+        active_signals = active_signals >> 1;
+    }
+}
+
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
@@ -507,14 +535,23 @@ wakeup(void *chan)
 // Process won't exit until it returns
 // to user space (see trap in trap.c).
 int
-kill(int pid)
+kill(int pid, int signum)
 {
   struct proc *p;
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
-      p->killed = 1;
+        update_pending_signals(p, signum);
+//      if(p->signal_handlers[signum].sa_handler == SIG_DFL){
+//          // here we do all the default actions
+//          do_default_action(signum, p);
+////          p->killed = 1;
+//      } else if(p->signal_handlers[SIGKILL].sa_handler == SIG_IGN){
+//          // ignore
+//      } else {
+//          p->signal_handlers[SIGKILL].sa_handler(signum)
+//      }
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
         p->state = RUNNABLE;
@@ -524,6 +561,30 @@ kill(int pid)
   }
   release(&ptable.lock);
   return -1;
+}
+
+void update_pending_signals(struct proc *p, int signum){
+    uint bit = 1;
+    for(int i=1; i < signum;i++){
+        bit = bit << 1; // shift left by 1
+    }
+    p->pending_signals = p->pending_signals | bit;
+}
+
+void do_default_action(int signum, struct proc *p){
+    if (signum == SIGKILL){
+        p->killed = 1;
+
+    } else if(signum == SIGCONT){
+        if(p->state == FROZEN)
+            p->state = RUNNABLE;
+
+    } else if (signum == SIGSTOP){
+        p->state = FROZEN;
+
+    } else {
+        // no more default handlers implemented
+    }
 }
 
 //PAGEBREAK: 36
@@ -539,7 +600,8 @@ procdump(void)
   [SLEEPING]  "sleep ",
   [RUNNABLE]  "runble",
   [RUNNING]   "run   ",
-  [ZOMBIE]    "zombie"
+  [ZOMBIE]    "zombie",
+  [FROZEN]    "frozen"
   };
   int i;
   struct proc *p;

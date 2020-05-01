@@ -1,6 +1,8 @@
 #include "types.h"
 #include "stat.h"
 #include "user.h"
+//#include "proc.h"
+#define SIGKILL 9
 
 int
 main(int argc, char **argv)
@@ -12,6 +14,6 @@ main(int argc, char **argv)
     exit();
   }
   for(i=1; i<argc; i++)
-    kill(atoi(argv[i]));
+    kill(atoi(argv[i]), SIGKILL);
   exit();
 }

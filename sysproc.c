@@ -30,10 +30,13 @@ int
 sys_kill(void)
 {
   int pid;
+  int signum;
 
   if(argint(0, &pid) < 0)
     return -1;
-  return kill(pid);
+  if(argint(1, &signum) < 0)
+    return -1;
+  return kill(pid, signum);
 }
 
 int
@@ -101,13 +104,17 @@ sys_sigprocmask(void){
 
 int
 sys_sigaction(void){
-  int signum;
-  struct sigaction* act;
-  struct sigaction* oldact;
-  if(argint(0, &signum)<0
-    || argptr(1,(void*)&act,sizeof (struct sigaction))<0
-    || argptr(2,(void*)&oldact,sizeof (struct sigaction))<0)
-      return -1;
-  
-  return set_sigaction(signum, act , oldact);
+    int signum;
+    struct sigaction* act;
+    struct sigaction* oldact;
+    if(argint(0, &signum)<0
+       || argptr(1,(void*)&act,sizeof (struct sigaction))<0
+       || argptr(2,(void*)&oldact,sizeof (struct sigaction))<0)
+        return -1;
+
+    return set_sigaction(signum, act , oldact);
+}
+void
+sys_sigret(void){
+
 }
