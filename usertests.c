@@ -1588,6 +1588,7 @@ validatetest(void)
     }
   }
 
+
   printf(stdout, "validate ok\n");
 }
 
