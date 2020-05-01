@@ -574,7 +574,7 @@ set_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
     oldact = myproc()->signal_handlers[signum];
   }
   // set the new sig action to the relevant signal
-  myproc()->signal_handlers[signum]= act;
+//todo  myproc()->signal_handlers[signum]= act;
   release(&ptable.lock);
   return 0;
 }
