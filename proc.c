@@ -387,32 +387,6 @@ scheduler(void)
   }
 }
 
-void handle_pending_signals(struct proc* p){
-    uint signals = p->pending_signals;
-    uint mask = p->signal_mask;
-    uint active_signals = (~mask) & (signals);
-
-    uint one = 1;
-//    for (int i=0;i< sizeof(uint)*4; i++){
-    for (int i=0;i< 31; i++){
-        uint first = active_signals & one;
-        if(first > 0){
-            uint signum = i;
-            if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
-                // here we do all the default actions
-                do_default_action(signum, p);
-//          p->killed = 1;
-            } else if((int)p->signal_handlers[SIGKILL].sa_handler == SIG_IGN){
-                // ignore
-            } else {
-                p->signal_handlers[SIGKILL].sa_handler(signum);
-            }
-        }
-        active_signals = active_signals >> 1;
-    }
-}
-
-
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this
@@ -537,8 +511,8 @@ wakeup(void *chan)
 int
 kill(int pid, int signum)
 {
-  struct proc *p;
-
+    cprintf("inside kill\n");
+    struct proc *p;
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
@@ -563,15 +537,48 @@ kill(int pid, int signum)
   return -1;
 }
 
+
+void handle_pending_signals(struct proc* p){
+    uint signals = p->pending_signals;
+    uint mask = p->signal_mask;
+    uint active_signals = (~mask) & (signals);
+    cprintf("inside handle_pending_signals, signals: %d, mask: %d, active_signals: %d\n",
+            signals, mask, active_signals);
+
+    uint one = 1;
+//    for (int i=0;i< sizeof(uint)*4; i++){
+    for (int i=0;i< 31; i++){
+        uint first = active_signals & one;
+        if(first > 0){
+            uint signum = i;
+            cprintf("signum %d is active\n", signum);
+            if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
+                // here we do all the default actions
+                do_default_action(signum, p);
+//          p->killed = 1;
+            } else if((int)p->signal_handlers[SIGKILL].sa_handler == SIG_IGN){
+                // ignore
+            } else {
+                p->signal_handlers[SIGKILL].sa_handler(signum);
+            }
+        }
+        active_signals = active_signals >> 1;
+    }
+}
+
 void update_pending_signals(struct proc *p, int signum){
+    cprintf("inside update_pending_signals, signum: %d, pid: %d\n", signum, p->pid);
+    cprintf("p->pending_signals: %d", p->pending_signals);
     uint bit = 1;
     for(int i=1; i < signum;i++){
         bit = bit << 1; // shift left by 1
     }
     p->pending_signals = p->pending_signals | bit;
+    cprintf("updated p->pending_signals: %d", p->pending_signals);
 }
 
 void do_default_action(int signum, struct proc *p){
+    cprintf("inside do_default_action, signum: %d, pid: %d\n", signum, p->pid);
     if (signum == SIGKILL){
         p->killed = 1;
 
