@@ -1782,9 +1782,9 @@ main(int argc, char *argv[])
 //  exitiputtest();
 //  iputtest();
 
-//  mem(); // not working
+//  mem(); // not working i think because of the kalloc() i did
 //  pipe1();
-  preempt();
+  preempt(); // fail here
   exitwait();
 
   rmdot();
