@@ -71,11 +71,12 @@ myproc(void) {
 int 
 allocpid(void) 
 {
-  int pid;
-  acquire(&ptable.lock);
-  pid = nextpid++;
-  release(&ptable.lock);
-  return pid;
+  int old_pid;
+  do {
+      old_pid = nextpid;
+  } while (!cas(&nextpid, old_pid, old_pid + 1));
+//    return old_pid + 1 ; // todo +1 ?
+    return old_pid;
 }
 
 //PAGEBREAK: 32
