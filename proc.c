@@ -231,8 +231,10 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  // signals
   for(int i=0; i< SIGNALS_SIZE; i++){
-    np->signal_handlers[i] = curproc->signal_handlers[i];
+    np->signal_handlers[i].sa_handler = curproc->signal_handlers[i].sa_handler;
+    np->signal_handlers[i].sigmask = curproc->signal_handlers[i].sigmask;
   }
   np->signal_mask = curproc->signal_mask;
 
@@ -518,7 +520,7 @@ wakeup(void *chan)
 int
 kill(int pid, int signum)
 {
-    // cprintf("inside kill\n");
+//     cprintf("inside kill\n");
   struct proc *p;
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
@@ -536,21 +538,26 @@ kill(int pid, int signum)
 }
 
 void handle_pending_signals(struct proc* p){
-    // cprintf("inside handle_pending_signals, signals: %d, mask: %d, active_signals: %d\n",
-    //         signals, mask, active_signals);
     // 1. backup process mask
     uint process_mask = p->signal_mask;
     uint signals = p->pending_signals;
-    uint one = 1;
+//    cprintf("inside handle_pending_signals, signals: %d, mask: %d\n", signals, process_mask);
+//    uint one = 1;
+    uint bit = 1;
+//    for(int i=0; i < signum;i++){
+//        bit = bit << 1; // shift left by 1
+//    }
     for (int i=0;i< SIGNALS_SIZE; i++){
         // 2. override process mask with signal's mask
+        uint signum = i;
         uint mask = p->signal_handlers[i].sigmask;
         uint active_signals = (~mask) & (signals);
-        uint first = active_signals & one;
+//        uint first = active_signals & one;
+        uint first = active_signals & bit;
+//        cprintf("signum: %d, mask: %d, active: %d, first: %d\n", signum, mask, active_signals, first);
         if(first > 0){
           // 3. run handler 
-            uint signum = i;
-            // cprintf("signum %d is active\n", signum);
+//             cprintf("signum %d is active\n", signum);
             if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
                 // here we do all the default actions
                 do_default_action(signum, p);
@@ -560,7 +567,8 @@ void handle_pending_signals(struct proc* p){
                 p->signal_handlers[signum].sa_handler(signum);
             }
         }
-        active_signals = active_signals >> 1;
+//        active_signals = active_signals >> 1;
+    bit = bit << 1; // shift left by 1
     }
     // 4. restore process mask
     p->signal_mask = process_mask;
@@ -572,11 +580,11 @@ void update_pending_signals(struct proc *p, int signum){
         bit = bit << 1; // shift left by 1
     }
     p->pending_signals = p->pending_signals | bit;
-    // cprintf("updated p->pending_signals: %d\n", p->pending_signals);
+//     cprintf("updated p->pending_signals: %d\n", p->pending_signals);
 }
 
 void do_default_action(int signum, struct proc *p){
-    // cprintf("inside do_default_action, signum: %d, pid: %d\n", signum, p->pid);
+//     cprintf("inside do_default_action, signum: %d, pid: %d\n", signum, p->pid);
     if (signum == SIGKILL){
         p->killed = 1;
     } else if(signum == SIGCONT){

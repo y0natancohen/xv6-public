@@ -7,7 +7,8 @@
 #include "syscall.h"
 #include "traps.h"
 #include "memlayout.h"
-#define SIGKILL 9
+//#define SIGKILL 9
+//#define SIGKILL 1
 
 char buf[8192];
 char name[3];
@@ -1758,18 +1759,18 @@ main(int argc, char *argv[])
   }
   close(open("usertests.ran", O_CREATE));
 
-  // argptest();
-  // createdelete();
-  // linkunlink();
-  // concreate();
-  // fourfiles();
-  // sharedfd();
+   argptest();
+   createdelete();
+   linkunlink();
+   concreate();
+   fourfiles();
+   sharedfd();
 
-  // bigargtest();
-  // bigwrite();
-  // bigargtest();
-  // bsstest();
-  sbrktest();
+   bigargtest();
+   bigwrite();
+   bigargtest();
+   bsstest();
+   sbrktest();
   validatetest();
 
   opentest();
@@ -1784,7 +1785,7 @@ main(int argc, char *argv[])
   pipe1();
   preempt(); 
   exitwait();
-  
+//
   rmdot();
   fourteen();
   bigfile();
@@ -1795,9 +1796,9 @@ main(int argc, char *argv[])
   iref();
   forktest();
   bigdir(); // slow
-
+//
   uio();
-
+//
   exectest();
 
   exit();

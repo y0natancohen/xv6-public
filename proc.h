@@ -33,13 +33,7 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE, FROZEN };
-#define SIGNALS_SIZE 32
 
-#define SIG_DFL 0 /* default signal handler */
-#define SIG_IGN 1 /* ignore signal */
-#define SIGKILL 9
-#define SIGSTOP 17
-#define SIGCONT 19
 
 struct sigaction {
   void (*sa_handler)(int);

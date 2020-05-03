@@ -2,7 +2,8 @@
 #include "stat.h"
 #include "user.h"
 //#include "proc.h"
-#define SIGKILL 9
+//#define SIGKILL 9
+//#define SIGKILL 1
 
 int
 main(int argc, char **argv)
