@@ -33,7 +33,7 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE, FROZEN };
-#define SIGNALS_SIZE 30
+#define SIGNALS_SIZE 32
 
 #define SIG_DFL 0 /* default signal handler */
 #define SIG_IGN 1 /* ignore signal */
@@ -41,6 +41,10 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE, FROZEN };
 #define SIGSTOP 17
 #define SIGCONT 19
 
+struct sigaction {
+  void (*sa_handler)(int);
+  uint sigmask; 
+};
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
@@ -53,21 +57,16 @@ struct proc {
   struct context *context;     // swtch() here to run process
   void *chan;                  // If non-zero, sleeping on chan
   int killed;                  // If non-zero, have been killed
-  int frozen;                  // If non-zero, have been frozen
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  uint pending_signals;
-  uint signal_mask;
-//  struct sigaction* signal_handlers[SIGNALS_SIZE];
-  struct sigaction* signal_handlers;
+  uint pending_signals;        // signals to hadnle
+  uint signal_mask;            // blocked signals
+  struct sigaction signal_handlers[SIGNALS_SIZE];  // signal handlers
+  // struct sigaction* signal_handlers;
   struct trapframe* user_trapframe_backup;
 };
 
-struct sigaction {
-  void (*sa_handler)(int);
-  uint sigmask; 
-};
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss

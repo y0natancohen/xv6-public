@@ -99,6 +99,11 @@ exec(char *path, char **argv)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+  // reset all handlers to default beside SIG_IGN and SIG_DFL - 2.1.2 section 3
+  for (int i=2; i<SIGNALS_SIZE; i++){
+      curproc->signal_handlers[i].sa_handler = SIG_DFL;
+      curproc->signal_handlers[i].sigmask = 0;
+  }
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;

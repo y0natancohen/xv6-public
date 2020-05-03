@@ -124,18 +124,24 @@ found:
   p->context = (struct context*)sp;
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
-
+  
   // signals
-  p->signal_handlers = (struct sigaction*) kalloc();
-  // kalloc gives 4096, which is bigger then -
-  // sizeof(sigaction)*SIGNALS_SIZE == (4+4)*30 = 240
-
-  for (int i=0; i<SIGNALS_SIZE; i++){
-      p->signal_handlers[i].sa_handler = SIG_DFL;
-      p->signal_handlers[i].sigmask = 0;
+  // sp -= sizeof (struct trapframe);
+  // p->user_trapframe_backup = (struct trapframe *)sp;
+  // for(int i=0; i<SIGNALS_SIZE; i++){
+  //   sp -= sizeof (struct sigaction);
+  //   p->signal_handlers[i] = (struct sigaction*)sp;
+  //   // memset(p->signal_handlers[i], 0, sizeof(struct sigaction));
+  //   p->signal_handlers[i]->sa_handler = SIG_DFL;
+  //   p->signal_handlers[i]->sigmask = 0;
+  // }
+  p->pending_signals = 0;
+  p->signal_mask = 0;
+  for(int i=0; i<SIGNALS_SIZE; i++){
+    p->signal_handlers[i].sa_handler = SIG_DFL;
+    p->signal_handlers[i].sigmask = 0;
   }
-
-    return p;
+  return p;
 }
 
 
@@ -363,9 +369,10 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
+      if(p->state != RUNNABLE && p->state != FROZEN)
         continue;
       handle_pending_signals(p); // if the process received sigstop, it will not be runnable anymore
+      // todo: it is not the case according to 2.3.1 description - ask in forum
       if(p->state != RUNNABLE)
         continue;
       // Switch to chosen process.  It is the process's job
@@ -511,23 +518,14 @@ wakeup(void *chan)
 int
 kill(int pid, int signum)
 {
-    cprintf("inside kill\n");
-    struct proc *p;
+    // cprintf("inside kill\n");
+  struct proc *p;
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
         update_pending_signals(p, signum);
-//      if(p->signal_handlers[signum].sa_handler == SIG_DFL){
-//          // here we do all the default actions
-//          do_default_action(signum, p);
-////          p->killed = 1;
-//      } else if(p->signal_handlers[SIGKILL].sa_handler == SIG_IGN){
-//          // ignore
-//      } else {
-//          p->signal_handlers[SIGKILL].sa_handler(signum)
-//      }
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING && signum==SIGKILL)
         p->state = RUNNABLE;
       release(&ptable.lock);
       return 0;
@@ -537,60 +535,57 @@ kill(int pid, int signum)
   return -1;
 }
 
-
 void handle_pending_signals(struct proc* p){
+    // cprintf("inside handle_pending_signals, signals: %d, mask: %d, active_signals: %d\n",
+    //         signals, mask, active_signals);
+    // 1. backup process mask
+    uint process_mask = p->signal_mask;
     uint signals = p->pending_signals;
-    uint mask = p->signal_mask;
-    uint active_signals = (~mask) & (signals);
-    cprintf("inside handle_pending_signals, signals: %d, mask: %d, active_signals: %d\n",
-            signals, mask, active_signals);
-
     uint one = 1;
-//    for (int i=0;i< sizeof(uint)*4; i++){
-    for (int i=0;i< 31; i++){
+    for (int i=0;i< SIGNALS_SIZE; i++){
+        // 2. override process mask with signal's mask
+        uint mask = p->signal_handlers[i].sigmask;
+        uint active_signals = (~mask) & (signals);
         uint first = active_signals & one;
         if(first > 0){
+          // 3. run handler 
             uint signum = i;
-            cprintf("signum %d is active\n", signum);
+            // cprintf("signum %d is active\n", signum);
             if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
                 // here we do all the default actions
                 do_default_action(signum, p);
-//          p->killed = 1;
-            } else if((int)p->signal_handlers[SIGKILL].sa_handler == SIG_IGN){
+              } else if((int)p->signal_handlers[signum].sa_handler == SIG_IGN){
                 // ignore
             } else {
-                p->signal_handlers[SIGKILL].sa_handler(signum);
+                p->signal_handlers[signum].sa_handler(signum);
             }
         }
         active_signals = active_signals >> 1;
     }
+    // 4. restore process mask
+    p->signal_mask = process_mask;
 }
 
 void update_pending_signals(struct proc *p, int signum){
-    cprintf("inside update_pending_signals, signum: %d, pid: %d\n", signum, p->pid);
-    cprintf("p->pending_signals: %d", p->pending_signals);
     uint bit = 1;
-    for(int i=1; i < signum;i++){
+    for(int i=0; i < signum;i++){
         bit = bit << 1; // shift left by 1
     }
     p->pending_signals = p->pending_signals | bit;
-    cprintf("updated p->pending_signals: %d", p->pending_signals);
+    // cprintf("updated p->pending_signals: %d\n", p->pending_signals);
 }
 
 void do_default_action(int signum, struct proc *p){
-    cprintf("inside do_default_action, signum: %d, pid: %d\n", signum, p->pid);
+    // cprintf("inside do_default_action, signum: %d, pid: %d\n", signum, p->pid);
     if (signum == SIGKILL){
         p->killed = 1;
-
     } else if(signum == SIGCONT){
         if(p->state == FROZEN)
             p->state = RUNNABLE;
-
     } else if (signum == SIGSTOP){
         p->state = FROZEN;
-
     } else {
-        // no more default handlers implemented
+        p->killed = 1;
     }
 }
 
@@ -648,11 +643,11 @@ set_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
   acquire(&ptable.lock);
   // fill current sig action data to user struct pointed by old act
   if(oldact!=0){
-    oldact = & myproc()->signal_handlers[signum];
+    oldact = &myproc()->signal_handlers[signum];
   }
   // set the new sig action to the relevant signal
-    myproc()->signal_handlers[signum].sigmask = act->sigmask;
-    myproc()->signal_handlers[signum].sa_handler = act->sa_handler;
+  myproc()->signal_handlers[signum].sigmask = act->sigmask;
+  myproc()->signal_handlers[signum].sa_handler = act->sa_handler;
 
   release(&ptable.lock);
   return 0;

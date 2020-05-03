@@ -7,7 +7,6 @@
 #include "syscall.h"
 #include "traps.h"
 #include "memlayout.h"
-//#include "proc.h"
 #define SIGKILL 9
 
 char buf[8192];
@@ -1759,34 +1758,33 @@ main(int argc, char *argv[])
   }
   close(open("usertests.ran", O_CREATE));
 
-//  argptest();
-//  createdelete();
-//  linkunlink();
-//  concreate();
-//  fourfiles();
-//  sharedfd();
-//
-//  bigargtest();
-//  bigwrite();
-//  bigargtest();
-//  bsstest();
-//  sbrktest();
-//  validatetest();
+  // argptest();
+  // createdelete();
+  // linkunlink();
+  // concreate();
+  // fourfiles();
+  // sharedfd();
 
-//  opentest();
-//  writetest();
-//  writetest1();
-//  createtest();
-//
-//  openiputtest();
-//  exitiputtest();
-//  iputtest();
+  // bigargtest();
+  // bigwrite();
+  // bigargtest();
+  // bsstest();
+  sbrktest();
+  validatetest();
 
-//  mem(); // not working i think because of the kalloc() i did
-//  pipe1();
-  preempt(); // fail here
+  opentest();
+  writetest();
+  writetest1();
+  createtest();
+
+  openiputtest();
+  exitiputtest();
+  iputtest();
+  mem(); // not working i think because of the kalloc() i did
+  pipe1();
+  preempt(); 
   exitwait();
-
+  
   rmdot();
   fourteen();
   bigfile();
