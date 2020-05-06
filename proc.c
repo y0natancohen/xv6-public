@@ -393,11 +393,12 @@ scheduler(void)
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-        if(p->state != RUNNABLE && p->state != FROZEN)
-            continue;
-        handle_pending_signals_kernel(p);
         if(p->state != RUNNABLE)
+        //  && p->state != FROZEN)
             continue;
+        // handle_pending_signals_kernel(p);
+        // if(p->state != RUNNABLE)
+            // continue;
 //        cprintf("scheduler pid: %d\n", p->pid);
 
 //      handle_pending_signals(p); // if the process received sigstop, it will not be runnable anymore
@@ -569,42 +570,35 @@ kill(int pid, int signum)
   return -1;
 }
 
+uint turnoff_flag(int index, uint value){
+  uint mask = 1 << index;
+  return (value & ~mask); 
+}
+
 void handle_pending_signals(struct trapframe *tf){
-//    cprintf("inside handle_pending_signals\n");
     struct proc* p = myproc();
     if(p==null) return;
-//    cprintf("handle_pending_signals not null\n");
-//    if ((tf->cs&3) != DPL_USER) return; // CPU in user mode
-//    cprintf("handle_pending_signals not user\n");
-
-//    cprintf("hi\n");
     // 1. backup process mask
     uint process_mask = p->signal_mask;
-//    cprintf("hi1\n");
     uint signals = p->pending_signals;
-//    cprintf("hi2\n");
-//    cprintf("1inside handle_pending_signals, signals: %d, mask: %d\n", signals, process_mask);
     uint bit = 1;
     uint cont_found = p->pending_signals & (bit << SIGCONT);
     if (p->state == FROZEN){
         if (cont_found){
+            p->pending_signals = turnoff_flag(SIGCONT, p->pending_signals);
             do_default_action(SIGCONT, p);
         } else {
             yield();
         }
     } else {
-//        cprintf("hi1\n");
         for (int i=0;i< SIGNALS_SIZE; i++){
-//            cprintf("hi %d\n", i);
             // 2. override process mask with signal's mask
             uint signum = i;
             uint mask = p->signal_handlers[i].sigmask;
             uint active_signals = (~mask) & (signals);
             uint first = active_signals & bit;
-//        cprintf("signum: %d, mask: %d, active: %d, first: %d\n", signum, mask, active_signals, first);
             if(first > 0){
-                cprintf("signal!!\n");
-                p->pending_signals = p->pending_signals & (bit << signum); // shutdown signal flag
+                p->pending_signals = turnoff_flag(signum, p->pending_signals); // shutdown signal flag
                 // 3. run handler
              cprintf("signum %d is active\n", signum);
                 if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
@@ -614,31 +608,20 @@ void handle_pending_signals(struct trapframe *tf){
                     // ignore
                 } else {
                     handle_user_signal(signum, p);
-
                 }
             }
             bit = bit << 1; // shift left by 1
         }
     }
-
     // 4. restore process mask
     p->signal_mask = process_mask;
 }
 
 void handle_pending_signals_kernel(struct proc *p){
-//    cprintf("inside handle_pending_signals\n");
     if(p==null) return;
-//    cprintf("handle_pending_signals not null\n");
-//    if ((tf->cs&3) != DPL_USER) return; // CPU in user mode
-//    cprintf("handle_pending_signals not user\n");
-
-//    cprintf("hi\n");
     // 1. backup process mask
-    uint process_mask = p->signal_mask;
-//    cprintf("hi1\n");
-    uint signals = p->pending_signals;
-//    cprintf("hi2\n");
-//    cprintf("1inside handle_pending_signals, signals: %d, mask: %d\n", signals, process_mask);
+    // uint process_mask = p->signal_mask;
+    // uint signals = p->pending_signals;
     uint bit = 1;
     uint cont_found = p->pending_signals & (bit << SIGCONT);
     if (p->state == FROZEN){
@@ -647,37 +630,37 @@ void handle_pending_signals_kernel(struct proc *p){
         } else {
             yield();
         }
-    } else {
-//        cprintf("hi1\n");
-        for (int i=0;i< SIGNALS_SIZE; i++){
-//            cprintf("hi %d\n", i);
-            // 2. override process mask with signal's mask
-            uint signum = i;
-            uint mask = p->signal_handlers[i].sigmask;
-            uint active_signals = (~mask) & (signals);
-            uint first = active_signals & bit;
-//        cprintf("signum: %d, mask: %d, active: %d, first: %d\n", signum, mask, active_signals, first);
-            if(first > 0){
-                cprintf("signal!!\n");
-                p->pending_signals = p->pending_signals & (bit << signum); // shutdown signal flag
-                // 3. run handler
-                cprintf("signum %d is active\n", signum);
-                if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
-                    // here we do all the default actions
-                    do_default_action(signum, p);
-                } else if((int)p->signal_handlers[signum].sa_handler == SIG_IGN){
-                    // ignore
-                } else {
-//                    handle_user_signal(signum, p);
+    } 
+//     else {
+// //        cprintf("hi1\n");
+//         for (int i=0;i< SIGNALS_SIZE; i++){
+// //            cprintf("hi %d\n", i);
+//             // 2. override process mask with signal's mask
+//             uint signum = i;
+//             uint mask = p->signal_handlers[i].sigmask;
+//             uint active_signals = (~mask) & (signals);
+//             uint first = active_signals & bit;
+// //        cprintf("signum: %d, mask: %d, active: %d, first: %d\n", signum, mask, active_signals, first);
+//             if(first > 0){
+//                 cprintf("signal!!\n");
+//                 p->pending_signals = p->pending_signals & (bit << signum); // shutdown signal flag
+//                 // 3. run handler
+//                 cprintf("signum %d is active\n", signum);
+//                 if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
+//                     // here we do all the default actions
+//                     do_default_action(signum, p);
+//                 } else if((int)p->signal_handlers[signum].sa_handler == SIG_IGN){
+//                     // ignore
+//                 } else {
+// //                    handle_user_signal(signum, p);
+//                 }
+//             }
+//             bit = bit << 1; // shift left by 1
+//         }
+//     }
 
-                }
-            }
-            bit = bit << 1; // shift left by 1
-        }
-    }
-
-    // 4. restore process mask
-    p->signal_mask = process_mask;
+//     // 4. restore process mask
+//     p->signal_mask = process_mask;
 }
 
 
