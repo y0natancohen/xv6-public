@@ -10,7 +10,6 @@ struct sleeplock;
 struct stat;
 struct superblock;
 struct sigaction;
-struct trapframe;
 
 // bio.c
 void            binit(void);
@@ -122,18 +121,14 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-uint            sigprocmask(uint);
-int             set_sigaction(int, const struct sigaction*, struct sigaction*);
-void            handle_pending_signals(struct trapframe*);
-void            do_default_action(int, struct proc*);
-void            update_pending_signals(struct proc*, int);
-void            sigret(void);
-void            handle_user_signal(int , struct proc*);
-void            my_func(struct proc*, struct cpu*);
-void            handle_pending_signals_kernel(struct proc*);
 
-void            sigret_syscall_finish(void);
+int             set_sigaction(int ,const struct sigaction*,struct sigaction*);
+int             sigret(void);
 void            sigret_syscall(void);
+void            sigret_syscall_finish(void);
+void            update_pending_signals(struct proc*, int);
+void            do_default_action(int, struct proc*);
+void            handle_user_signal(int , struct proc*);
 
 
 // swtch.S

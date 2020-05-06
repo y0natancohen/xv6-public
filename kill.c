@@ -1,20 +1,15 @@
 #include "types.h"
 #include "stat.h"
 #include "user.h"
-//#include "proc.h"
-//#define SIGKILL 9
-//#define SIGKILL 1
 
 int
 main(int argc, char **argv)
 {
-  int i;
 
-  if(argc < 2){
-    printf(2, "usage: kill pid...\n");
+    if(argc < 3){
+        printf(2, "usage: kill pid signum...\n");
+        exit();
+    }
+    kill(atoi(argv[1]), atoi(argv[2]));
     exit();
-  }
-  for(i=1; i<argc; i++)
-    kill(atoi(argv[i]), SIGKILL);
-  exit();
 }
