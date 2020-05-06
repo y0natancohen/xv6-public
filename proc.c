@@ -68,16 +68,26 @@ myproc(void) {
 
 
 
-int 
-allocpid(void) 
+int allocpid(void)
 {
-  int old_pid;
-  do {
-      old_pid = nextpid;
-  } while (!cas(&nextpid, old_pid, old_pid + 1));
-//    return old_pid + 1 ; // todo +1 ?
-    return old_pid;
+    int pid;
+    acquire(&ptable.lock);
+    pid = nextpid++;
+    release(&ptable.lock);
+    return pid;
 }
+
+//
+//int
+//allocpid(void)
+//{
+//  int old_pid;
+//  do {
+//      old_pid = nextpid;
+//  } while (!cas(&nextpid, old_pid, old_pid + 1));
+////    return old_pid + 1 ; // todo +1 ?
+//    return old_pid;
+//}
 
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
@@ -87,7 +97,7 @@ allocpid(void)
 static struct proc*
 allocproc(void)
 {
-    cprintf("inside allocproc\n");
+//    cprintf("inside allocproc\n");
   struct proc *p;
   char *sp;
 
@@ -118,8 +128,13 @@ found:
   p->tf = (struct trapframe*)sp;
 
   // Leave room for trap frame backup.
-  sp -= sizeof *p->user_trapframe_backup;
-  p->user_trapframe_backup = (struct trapframe*)sp;
+    char *sp1;
+    sp1 = p->kstack + sizeof *p->user_trapframe_backup;
+    sp1 -= sizeof *p->user_trapframe_backup;
+    p->user_trapframe_backup = (struct trapframe *)sp1;
+
+//  sp -= sizeof *p->user_trapframe_backup;
+//  p->user_trapframe_backup = (struct trapframe*)sp;
 
   // Set up new context to start executing at forkret,
   // which returns to trapret.
@@ -380,7 +395,10 @@ scheduler(void)
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
         if(p->state != RUNNABLE && p->state != FROZEN)
             continue;
-        cprintf("scheduler pid: %d\n", p->pid);
+        handle_pending_signals_kernel(p);
+        if(p->state != RUNNABLE)
+            continue;
+//        cprintf("scheduler pid: %d\n", p->pid);
 
 //      handle_pending_signals(p); // if the process received sigstop, it will not be runnable anymore
       // todo: it is not the case according to 2.3.1 description - ask in forum
@@ -404,6 +422,10 @@ scheduler(void)
     release(&ptable.lock);
 
   }
+}
+
+void my_func(struct proc *p, struct cpu *c){
+
 }
 
 // Enter scheduler.  Must hold only ptable.lock
@@ -548,13 +570,12 @@ kill(int pid, int signum)
 }
 
 void handle_pending_signals(struct trapframe *tf){
-    return;
 //    cprintf("inside handle_pending_signals\n");
     struct proc* p = myproc();
     if(p==null) return;
-    cprintf("handle_pending_signals not null\n");
+//    cprintf("handle_pending_signals not null\n");
 //    if ((tf->cs&3) != DPL_USER) return; // CPU in user mode
-    cprintf("handle_pending_signals not user\n");
+//    cprintf("handle_pending_signals not user\n");
 
 //    cprintf("hi\n");
     // 1. backup process mask
@@ -572,9 +593,9 @@ void handle_pending_signals(struct trapframe *tf){
             yield();
         }
     } else {
-        cprintf("hi1\n");
+//        cprintf("hi1\n");
         for (int i=0;i< SIGNALS_SIZE; i++){
-            cprintf("hi %d\n", i);
+//            cprintf("hi %d\n", i);
             // 2. override process mask with signal's mask
             uint signum = i;
             uint mask = p->signal_handlers[i].sigmask;
@@ -603,6 +624,63 @@ void handle_pending_signals(struct trapframe *tf){
     // 4. restore process mask
     p->signal_mask = process_mask;
 }
+
+void handle_pending_signals_kernel(struct proc *p){
+//    cprintf("inside handle_pending_signals\n");
+    if(p==null) return;
+//    cprintf("handle_pending_signals not null\n");
+//    if ((tf->cs&3) != DPL_USER) return; // CPU in user mode
+//    cprintf("handle_pending_signals not user\n");
+
+//    cprintf("hi\n");
+    // 1. backup process mask
+    uint process_mask = p->signal_mask;
+//    cprintf("hi1\n");
+    uint signals = p->pending_signals;
+//    cprintf("hi2\n");
+//    cprintf("1inside handle_pending_signals, signals: %d, mask: %d\n", signals, process_mask);
+    uint bit = 1;
+    uint cont_found = p->pending_signals & (bit << SIGCONT);
+    if (p->state == FROZEN){
+        if (cont_found){
+            do_default_action(SIGCONT, p);
+        } else {
+            yield();
+        }
+    } else {
+//        cprintf("hi1\n");
+        for (int i=0;i< SIGNALS_SIZE; i++){
+//            cprintf("hi %d\n", i);
+            // 2. override process mask with signal's mask
+            uint signum = i;
+            uint mask = p->signal_handlers[i].sigmask;
+            uint active_signals = (~mask) & (signals);
+            uint first = active_signals & bit;
+//        cprintf("signum: %d, mask: %d, active: %d, first: %d\n", signum, mask, active_signals, first);
+            if(first > 0){
+                cprintf("signal!!\n");
+                p->pending_signals = p->pending_signals & (bit << signum); // shutdown signal flag
+                // 3. run handler
+                cprintf("signum %d is active\n", signum);
+                if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
+                    // here we do all the default actions
+                    do_default_action(signum, p);
+                } else if((int)p->signal_handlers[signum].sa_handler == SIG_IGN){
+                    // ignore
+                } else {
+//                    handle_user_signal(signum, p);
+
+                }
+            }
+            bit = bit << 1; // shift left by 1
+        }
+    }
+
+    // 4. restore process mask
+    p->signal_mask = process_mask;
+}
+
+
 void handle_user_signal(int signum, struct proc* p){
     *p->user_trapframe_backup = *p->tf;
     uint code_inject_size = (uint) sigret_syscall_finish - (uint) sigret_syscall;

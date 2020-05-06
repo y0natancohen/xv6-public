@@ -182,18 +182,18 @@ struct trapframe {
   ushort padding6;
 };
 
-static inline int cas(volatile int * addr, int expected, int newval) {
-    int success = 1;
-    asm(
-"lock;\n\t"
-// eax == [ebx] ? [ebx] = newval : eax = [ebx]
-"cmpxchgl %3, (%2)\n\t"
-"jz is_eq_%=\n\t"
-"movl $0, %0\n\t"
-"is_eq_%=:\n\t"
-: "=m"(success)
-: "a"(expected), "b"(addr), "r"(newval)
-//: "memory"
-);
-    return success;
-}
+//static inline int cas(volatile int * addr, int expected, int newval) {
+//    int success = 1;
+//    asm(
+//"lock;\n\t"
+//// eax == [ebx] ? [ebx] = newval : eax = [ebx]
+//"cmpxchgl %3, (%2)\n\t"
+//"jz is_eq_%=\n\t"
+//"movl $0, %0\n\t"
+//"is_eq_%=:\n\t"
+//: "=m"(success)
+//: "a"(expected), "b"(addr), "r"(newval)
+////: "memory"
+//);
+//    return success;
+//}

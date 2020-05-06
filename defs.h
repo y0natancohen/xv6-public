@@ -129,6 +129,8 @@ void            do_default_action(int, struct proc*);
 void            update_pending_signals(struct proc*, int);
 void            sigret(void);
 void            handle_user_signal(int , struct proc*);
+void            my_func(struct proc*, struct cpu*);
+void            handle_pending_signals_kernel(struct proc*);
 
 void            sigret_syscall_finish(void);
 void            sigret_syscall(void);

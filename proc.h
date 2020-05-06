@@ -35,10 +35,11 @@ struct context {
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE, FROZEN };
 
 
-struct sigaction {
-  void (*sa_handler)(int);
-  uint sigmask; 
-};
+struct sigaction;
+//struct sigaction {
+//  void (*sa_handler)(int);
+//  uint sigmask;
+//};
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
