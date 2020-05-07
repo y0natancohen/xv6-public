@@ -62,8 +62,8 @@ int main(int argc, char *argv[])
         kill(childpid, SIGCONT);
         printf(1,"father: send cont to son\n");
         sleep(s);
-        //kill(childpid,3);//custom sigaction to sigcont
-        //sleep(10);
+        //kill(childpid,3);//custom sigaction to sigcont   
+        //sleep(10); 
 //        kill(childpid,SIGSTOP);// not suppose to do anythibg
 //        printf(1,"father: send stop \n");
 
@@ -72,14 +72,14 @@ int main(int argc, char *argv[])
 
         kill(childpid, 4);
         kill(childpid, 5);
-
+        
 //        kill(childpid, 11); //like kill 9 in default
         sleep(s);
         kill(childpid, SIGKILL);
         wait();
     }
 
-
+    
 //    printf(1,"bye!!!!!!!!!!!!!!!\n");
     exit();
 }

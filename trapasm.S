@@ -16,7 +16,7 @@ alltraps:
   pushl %fs
   pushl %gs
   pushal
-
+  
   # Set up data segments.
   movw $(SEG_KDATA<<3), %ax
   movw %ax, %ds

@@ -7,8 +7,6 @@
 #include "syscall.h"
 #include "traps.h"
 #include "memlayout.h"
-//#define SIGKILL 9
-//#define SIGKILL 1
 
 char buf[8192];
 char name[3];
@@ -392,9 +390,9 @@ preempt(void)
   }
   close(pfds[0]);
   printf(1, "kill... ");
-  kill(pid1, SIGKILL);
-  kill(pid2, SIGKILL);
-  kill(pid3, SIGKILL);
+  kill(pid1,SIGKILL);
+  kill(pid2,SIGKILL);
+  kill(pid3,SIGKILL);
   printf(1, "wait... ");
   wait();
   wait();
@@ -448,7 +446,7 @@ mem(void)
     m1 = malloc(1024*20);
     if(m1 == 0){
       printf(1, "couldn't allocate mem?!!\n");
-      kill(ppid, SIGKILL);
+      kill(ppid,SIGKILL);
       exit();
     }
     free(m1);
@@ -1505,7 +1503,7 @@ sbrktest(void)
     }
     if(pid == 0){
       printf(stdout, "oops could read %x = %x\n", a, *a);
-      kill(ppid, SIGKILL);
+      kill(ppid,SIGKILL);
       exit();
     }
     wait();
@@ -1534,7 +1532,7 @@ sbrktest(void)
   for(i = 0; i < sizeof(pids)/sizeof(pids[0]); i++){
     if(pids[i] == -1)
       continue;
-    kill(pids[i], SIGKILL);
+    kill(pids[i],SIGKILL);
     wait();
   }
   if(c == (char*)0xffffffff){
@@ -1578,7 +1576,7 @@ validatetest(void)
     }
     sleep(0);
     sleep(0);
-    kill(pid, SIGKILL);
+    kill(pid,SIGKILL);
     wait();
 
     // try to crash the kernel by passing in a bad string pointer
@@ -1587,7 +1585,6 @@ validatetest(void)
       exit();
     }
   }
-
 
   printf(stdout, "validate ok\n");
 }
@@ -1759,18 +1756,18 @@ main(int argc, char *argv[])
   }
   close(open("usertests.ran", O_CREATE));
 
-   argptest();
-   createdelete();
-   linkunlink();
-   concreate();
-   fourfiles();
-   sharedfd();
+  argptest();
+  createdelete();
+  linkunlink();
+  concreate();
+  fourfiles();
+  sharedfd();
 
-   bigargtest();
-   bigwrite();
-   bigargtest();
-   bsstest();
-   sbrktest();
+  bigargtest();
+  bigwrite();
+  bigargtest();
+  bsstest();
+  sbrktest();
   validatetest();
 
   opentest();
@@ -1781,11 +1778,12 @@ main(int argc, char *argv[])
   openiputtest();
   exitiputtest();
   iputtest();
-  mem(); // not working i think because of the kalloc() i did
+
+  mem();
   pipe1();
-  preempt(); 
+  preempt();
   exitwait();
-//
+
   rmdot();
   fourteen();
   bigfile();
@@ -1796,9 +1794,9 @@ main(int argc, char *argv[])
   iref();
   forktest();
   bigdir(); // slow
-//
+
   uio();
-//
+
   exectest();
 
   exit();
