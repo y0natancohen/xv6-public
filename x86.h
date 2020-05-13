@@ -144,6 +144,7 @@ lcr3(uint val)
   asm volatile("movl %0,%%cr3" : : "r" (val));
 }
 
+//3.1
 //static inline int cas(volatile int * addr, int expected, int newval) {
 //    int success = 1;
 //    asm(

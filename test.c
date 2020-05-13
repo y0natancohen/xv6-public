@@ -19,6 +19,9 @@
 void handler(int sig)
 {
     printf(1, "handler #1 on user space, signum: %d\n", sig);
+    while(1==1){
+            printf(1, "handler 1\n");
+        }
 }
 
 void handler2(int sig)
@@ -27,59 +30,103 @@ void handler2(int sig)
 }
 
 
+void test5(){
+    uint childpid;
+    if ((childpid = fork()) == 0)
+    {
+        printf(1,"child: pid: %d\n",getpid());
+        sleep(10000);
+    }
+    else
+    {
+        printf(1,"father: pid: %d\n",getpid());
+        sleep(5);
+        kill(childpid, SIGKILL); //like kill 9 in default
+        wait();
+    }
 
+    // restoreActions();
+    // passedTest(5);
+}
 int main(int argc, char *argv[])
 {
-    uint s = 20;
+    uint s = 10;
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = (void *)SIGCONT;
-    sigaction(3, &sa, null);
     sa.sa_handler = &handler;
-    sigaction(4, &sa, null);
-    sa.sa_handler = &handler2;
-    sigaction(5, &sa, null);
+    sa.sigmask = 524288;
+    sigaction(2, &sa, null);
+    //sa.sa_handler = &handler;
+
+    // trying to override SIGSTOP default handler - forbidden!
+    // int res = sigaction(SIGSTOP, &sa, null);
+    // printf(1, "syscall sigaction res: %d\n", res);
+
+    // trying to override SIGKILL default handler - forbidden!
+    // int res = sigaction(SIGKILL, &sa, null);
+    // printf(1, "syscall sigaction res: %d\n", res);
+
+    // trying to block SIGSTOP signal - forbidden!
+    // uint oldMask = sigprocmask(512); 
+    // printf(1, "old mask is: %d\n", oldMask);
+    
+    // trying to block SIGKILL signal - forbidden!
+    // uint oldMask = sigprocmask(131072); 
+    // printf(1, "old mask is: %d\n", oldMask);
+
+    // trying to ignore SIGCONT signal - allowed!
+    // int res = sigaction(SIGCONT, &sa, null);
+    // printf(1, "syscall sigaction res: %d\n", res);
+
+    // trying to block SIGCONT signal - allowed!
+    // printf(1, "blocking cont sig\n");
+    
+    // sigprocmask(524288); // block sigcont 
+    // sigprocmask(4); // block user
+    // printf(1, "old mask is: %d\n", oldMask);
+
+    // assign sig number=2 signal to user handler
+    // sigaction(SIGCONT, &sa, null);
+    // printf(1, "registered user action to SIGCONT(19)\n");
+    // block user handled signal
+    // sigprocmask(4);
+
+    // sigaction(3, &sa, null);
+    // sa.sa_handler = &handler;
+    // sigaction(4, &sa, null);
+    // sa.sa_handler = &handler2;
+    // sigaction(5, &sa, null);
     //kill(getchildpid(),4);
     //kill(getchildpid(),5);
 
     uint childpid;
     if ((childpid = fork()) == 0)
     {
-        printf(1,"child: pid: %d\n",getpid());
-        printf(1,"child: stop\n");
-//        kill(getpid(),SIGSTOP);
-        printf(1,"child: continue\n");
-        while(1==1){
-            printf(1, "alive\n");
-        }
+        printf(1,"child pid: %d\n",getpid());
+        // while(1==1){
+        // }
+        sleep(1000000);
     }
     else
     {
-        sleep(s);
-        kill(childpid,SIGSTOP);
-        printf(1,"father: send stop \n");
-        sleep(s*3);
-        kill(childpid, SIGCONT);
-        printf(1,"father: send cont to son\n");
-        sleep(s);
-        //kill(childpid,3);//custom sigaction to sigcont   
-        //sleep(10); 
-//        kill(childpid,SIGSTOP);// not suppose to do anythibg
-//        printf(1,"father: send stop \n");
+        // printf(1,"father pid: %d\n",getpid());
+        // sleep(s);
+        // kill(childpid, 2);
+        // printf(1,"father: send user \n");
 
-//        sleep(10);
-        printf(1,"send 2 user signals to son:\n");
+        // sleep(s);
+        // printf(1,"father: send stop \n");
+        // kill(childpid,SIGSTOP);
 
-        kill(childpid, 4);
-        kill(childpid, 5);
-        
-//        kill(childpid, 11); //like kill 9 in default
-        sleep(s);
+        // sleep(s*5);
+        // kill(childpid, SIGCONT);
+        // printf(1,"father: send sig cont \n");
+
+        sleep(s*5);
+        printf(1,"father: send kill\n");
         kill(childpid, SIGKILL);
         wait();
     }
-
     
-//    printf(1,"bye!!!!!!!!!!!!!!!\n");
     exit();
 }

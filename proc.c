@@ -143,6 +143,8 @@ found:
   p->signal_mask = 0;
   p->got_user_signal = 0;
   p->frozen = 0;
+  p->sigcont_bit_is_up =0;
+  p->sigkill_bit_is_up =0;
 
   return p;
 }
@@ -357,6 +359,12 @@ int wait(void)
   }
 }
 
+int sigblocked(struct proc* p, int signum){
+  uint bit =1 ;
+  bit <<= signum;
+  return ((p->signal_mask & bit) >0);
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -382,8 +390,11 @@ void scheduler(void)
     {
       if(
         ((p->state == RUNNABLE)  &&   p->frozen == 0) ||
-        ((p->frozen == 1)        &&   p->sigcont_bit_is_up)
+        ((p->frozen == 1) && p->sigcont_bit_is_up && !sigblocked(p, SIGCONT) && p->state == RUNNABLE) ||
+        (p->sigkill_bit_is_up && (p->state == RUNNABLE || p->state == SLEEPING))
         ){
+          // cprintf("sched: proc id: %d, state: %d kill_bit: %d, killed: %d\n", 
+          // p->pid, p->state, p->sigkill_bit_is_up, p->killed);
           // Switch to chosen process.  It is the process's job
           // to release ptable.lock and then reacquire it
           // before jumping back to us.
@@ -560,12 +571,16 @@ void update_pending_signals(struct proc* p, int signum){
     uint bit = 1;
     bit = bit << signum;
 
-    if (signum == SIGKILL || signum == SIGSTOP || signum == SIGCONT ||
-        ((~p->signal_mask) & bit) > 0) {
-        p->pending_signals = p->pending_signals | bit;
-    }
+    // if (signum == SIGKILL || signum == SIGSTOP 
+    //     ((~p->signal_mask) & bit) > 0) 
+    //  ) {
+    p->pending_signals = p->pending_signals | bit;
+    // }
     if (signum == SIGCONT){
         p->sigcont_bit_is_up = 1;
+    }
+    if (signum == SIGKILL){
+        p->sigkill_bit_is_up = 1;
     }
 }
 
@@ -621,21 +636,22 @@ void handle_pending_signals(struct trapframe *tf) {
     struct proc *p = myproc();
     if (p == null) return;
     if (p->got_user_signal) return;
-    if ((tf->cs & 3) != DPL_USER) return; // CPU in user mode
+    if (p->sigkill_bit_is_up ==0 && (tf->cs & 3) != DPL_USER) return; // CPU in user mode
     uint bit = 1;
     for (int signum=0; signum<SIGNALS_SIZE; signum++){
         if ((bit & p->pending_signals) > 0){
+            if((((~p->signal_mask) & bit) > 0) || signum == SIGKILL || signum==SIGSTOP){
+              p->pending_signals = p->pending_signals & (~bit); // shutdown bit
 
-            p->pending_signals = p->pending_signals & (~bit); // shutdown bit
-
-            if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
-                do_default_action(signum, p);
-            } else if((int)p->signal_handlers[signum].sa_handler == SIG_IGN){
-                // ignore
-            } else {
-                handle_user_signal(signum, p);
+              if((int)p->signal_handlers[signum].sa_handler == SIG_DFL){
+                  do_default_action(signum, p);
+              } else if((int)p->signal_handlers[signum].sa_handler == SIG_IGN){
+                  // ignore
+              } else {
+                  handle_user_signal(signum, p);
+              }
+              // break;
             }
-            break;
         }
         bit = bit << 1;
     }
@@ -645,8 +661,10 @@ void do_default_action(int signum, struct proc *p){
 //    cprintf("inside do_default_action, signum: %d, pid: %d\n", signum, p->pid);
     if (signum == SIGKILL){
         p->killed = 1;
-        if (p->state == SLEEPING)
+        if (p->state == SLEEPING){
             p->state = RUNNABLE;
+        }
+        p->sigkill_bit_is_up = 0;
     } else if(signum == SIGCONT){
         p->frozen = 0;
         p->sigcont_bit_is_up = 0;

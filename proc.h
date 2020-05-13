@@ -58,6 +58,7 @@ struct proc {
   int frozen;
   int got_user_signal;
   int sigcont_bit_is_up;
+  int sigkill_bit_is_up;
 };
 
 

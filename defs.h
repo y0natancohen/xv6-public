@@ -121,7 +121,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-
+int             sigblocked(struct proc*, int);
 int             set_sigaction(int ,const struct sigaction*,struct sigaction*);
 int             sigret(void);
 void            sigret_syscall(void);
