@@ -9,7 +9,6 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
-struct sigaction;
 
 // bio.c
 void            binit(void);
@@ -108,7 +107,7 @@ int             cpuid(void);
 void            exit(void);
 int             fork(void);
 int             growproc(int);
-int             kill(int, int);
+int             kill(int);
 struct cpu*     mycpu(void);
 struct proc*    myproc();
 void            pinit(void);
@@ -121,15 +120,6 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-int             sigblocked(struct proc*, int);
-int             set_sigaction(int ,const struct sigaction*,struct sigaction*);
-int             sigret(void);
-void            sigret_syscall(void);
-void            sigret_syscall_finish(void);
-void            update_pending_signals(struct proc*, int);
-void            do_default_action(int, struct proc*);
-void            handle_user_signal(int , struct proc*);
-
 
 // swtch.S
 void            swtch(struct context**, struct context*);
