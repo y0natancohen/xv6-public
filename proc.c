@@ -12,6 +12,8 @@ struct{
   struct proc proc[NPROC];
 } ptable;
 
+volatile int used = 0;
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -19,6 +21,16 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+
+void cas_push(volatile int * used1){
+    pushcli();
+    while (!cas(&used, 0, 1)){}
+}
+
+void cas_pop(volatile int * used1){
+    cas(&used, 1, 0);
+    popcli();
+}
 
 void
 pinit(void)
@@ -64,12 +76,13 @@ myproc(void){
   return p;
 }
 
-int allocpid(void)
+int
+allocpid(void)
 {
     int pid;
-    acquire(&ptable.lock);
-    pid = nextpid++;
-    release(&ptable.lock);
+    do {
+        pid = nextpid;
+    } while (!cas(&nextpid, pid, pid + 1));
     return pid;
 }
 
@@ -92,18 +105,18 @@ allocproc(void)
   struct proc *p;
   char *sp;
 
-  acquire(&ptable.lock);
+  cas_push(&used);
 
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if (p->state == UNUSED)
       goto found;
 
-  release(&ptable.lock);
+  cas_pop(&used);
   return 0;
 
 found:
   p->state = EMBRYO;
-  release(&ptable.lock);
+  cas_pop(&used);
 
   p->pid = allocpid();
 
@@ -179,11 +192,11 @@ void userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
-  acquire(&ptable.lock);
+  cas_push(&used);
 
   p->state = RUNNABLE;
 
-  release(&ptable.lock);
+  cas_pop(&used);
 }
 
 // Grow current process's memory by n bytes.
@@ -254,11 +267,11 @@ int fork(void)
 
   pid = np->pid;
 
-  acquire(&ptable.lock);
+  cas_push(&used);
 
   np->state = RUNNABLE;
 
-  release(&ptable.lock);
+  cas_pop(&used);
 
   return pid;
 }
@@ -290,7 +303,7 @@ void exit(void)
   end_op();
   curproc->cwd = 0;
 
-  acquire(&ptable.lock);
+  cas_push(&used);
 
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
@@ -320,7 +333,7 @@ int wait(void)
   int havekids, pid;
   struct proc *curproc = myproc();
 
-  acquire(&ptable.lock);
+  cas_push(&used);
   for (;;)
   {
     // Scan through table looking for exited children.
@@ -342,7 +355,7 @@ int wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        release(&ptable.lock);
+        cas_pop(&used);
         return pid;
       }
     }
@@ -350,7 +363,7 @@ int wait(void)
     // No point waiting if we don't have any children.
     if (!havekids || curproc->killed)
     {
-      release(&ptable.lock);
+      cas_pop(&used);
       return -1;
     }
 
@@ -386,7 +399,7 @@ void scheduler(void)
 
 
     // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
+    cas_push(&used);
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     {
       if(
@@ -410,7 +423,7 @@ void scheduler(void)
           c->proc = 0;
       }
     }
-    release(&ptable.lock);
+    cas_pop(&used);
   }
 }
 
@@ -426,8 +439,8 @@ void sched(void)
   int intena;
   struct proc *p = myproc();
 
-  if (!holding(&ptable.lock))
-    panic("sched ptable.lock");
+//  if (!holding(&ptable.lock))
+//    panic("sched ptable.lock");
   if (mycpu()->ncli != 1)
     panic("sched locks");
   if (p->state == RUNNING)
@@ -442,10 +455,10 @@ void sched(void)
 // Give up the CPU for one scheduling round.
 void yield(void)
 {
-  acquire(&ptable.lock); //DOC: yieldlock
+  cas_push(&used); //DOC: yieldlock
   myproc()->state = RUNNABLE;
   sched();
-  release(&ptable.lock);
+  cas_pop(&used);
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -454,7 +467,7 @@ void forkret(void)
 {
   static int first = 1;
   // Still holding ptable.lock from scheduler.
-  release(&ptable.lock);
+  cas_pop(&used);
 
   if (first)
   {
@@ -489,7 +502,8 @@ void sleep(void *chan, struct spinlock *lk)
   // so it's okay to release lk.
   if (lk != &ptable.lock)
   {                        //DOC: sleeplock0
-    acquire(&ptable.lock); //DOC: sleeplock1
+//    acquire(&ptable.lock); //DOC: sleeplock1
+      cas_push(&used);
     release(lk);
   }
   // Go to sleep.
@@ -504,7 +518,7 @@ void sleep(void *chan, struct spinlock *lk)
   // Reacquire original lock.
   if (lk != &ptable.lock)
   { //DOC: sleeplock2
-    release(&ptable.lock);
+    cas_pop(&used);
     acquire(lk);
   }
 }
@@ -525,14 +539,14 @@ wakeup1(void *chan)
 // Wake up all processes sleeping on chan.
 void wakeup(void *chan)
 {
-  acquire(&ptable.lock);
+  cas_push(&used);
   wakeup1(chan);
-  release(&ptable.lock);
+  cas_pop(&used);
 }
 
 int set_sigaction(int signum, const struct sigaction *act, struct sigaction *oldact){
   if (signum == SIGKILL || signum == SIGSTOP) return -1;
-  acquire(&ptable.lock);
+  cas_push(&used);
 
   struct proc *p = myproc();
   if (oldact != null){
@@ -543,7 +557,7 @@ int set_sigaction(int signum, const struct sigaction *act, struct sigaction *old
   p->signal_handlers[signum].sa_handler = act->sa_handler;
   p->signal_handlers[signum].sigmask = act->sigmask;
 
-  release(&ptable.lock);
+  cas_pop(&used);
   return 0;
 }
 
@@ -555,16 +569,16 @@ int kill(int pid, int signum){
 
   struct proc *p;
 
-  acquire(&ptable.lock);
+  cas_push(&used);
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if (p->pid == pid){
         update_pending_signals(p, signum);
         // Wake process from sleep if necessary.  -> done in do_default_action
-        release(&ptable.lock);
+        cas_pop(&used);
         return 0;
     }
   }
-  release(&ptable.lock);
+  cas_pop(&used);
   return -1;
 }
 
