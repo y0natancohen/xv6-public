@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
         sleep(s*5);
         printf(1,"father: send kill\n");
         kill(childpid, SIGKILL);
-        wait();
+        // wait();
     }
     
     exit();
