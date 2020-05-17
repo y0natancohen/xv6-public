@@ -22,15 +22,15 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-void cas_push(volatile int * used1){
-    pushcli();
-    while (!cas(&used, 0, 1)){}
-}
+// void cas_push(volatile int * used1){
+//     pushcli();
+//     while (!cas(&used, 0, 1)){}
+// }
 
-void cas_pop(volatile int * used1){
-    cas(&used, 1, 0);
-    popcli();
-}
+// void cas_pop(volatile int * used1){
+//     cas(&used, 1, 0);
+//     popcli();
+// }
 
 void
 pinit(void)
@@ -104,17 +104,23 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
-
   pushcli();
+ // cprintf("pushcli allocproc ncli=%d\n", mycpu()->ncli);
   do {
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    // cprintf("unused: %d\n", UNUSED);
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      // cprintf("p->state: %d\n", p->state);
       if(p->state == UNUSED)
         break;
+    }
     if (p == &ptable.proc[NPROC]) {
+     // cprintf("popcli allocproc ncli=%d\n", mycpu()->ncli);
       popcli();
+     // cprintf("exiting table entry catch..\n");
       return 0; // ptable is full
     }
   } while (!cas(&p->state, UNUSED, EMBRYO));
+ // cprintf("popcli allocproc ncli=%d\n", mycpu()->ncli);
   popcli();
 
   p->pid = allocpid();
@@ -167,16 +173,12 @@ void userinit(void)
 {
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
-  cprintf("tahat\n");
   p = allocproc();
-  cprintf("taha2\n");
   initproc = p;
-  cprintf("taha3\n");
+ // cprintf("pid: %d\n",p);
   if ((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
-  cprintf("taha4\n");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
-  cprintf("taha5\n");
   p->sz = PGSIZE;
   memset(p->tf, 0, sizeof(*p->tf));
   p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
@@ -194,9 +196,11 @@ void userinit(void)
   // run this process. the acquire forces the above
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
-  pushcli();
+  // cprintf("pushcli userinit ncli=%d\n", mycpu()->ncli);
+  // pushcli();
+  // cprintf("pushcli userinit ncli=%d\n", mycpu()->ncli);
   if(!cas(&p->state, EMBRYO, RUNNABLE)) panic("panica userinit");
-  popcli();
+  // popcli();
 }
 
 // Grow current process's memory by n bytes.
@@ -267,9 +271,12 @@ int fork(void)
 
   pid = np->pid;
 
-  pushcli();
+  // cprintf("pushcli fork ncli=%d\n", mycpu()->ncli);
+  // pushcli();
+  // cprintf("pushcli fork ncli=%d\n", mycpu()->ncli);
+
   cas(&np->state, EMBRYO,  RUNNABLE);
-  popcli();
+  // popcli();
 
   return pid;
 }
@@ -303,6 +310,8 @@ void exit(void)
 
   // cas_push(&used);
   pushcli(); // todo who releases?
+ // cprintf("pushcli exit ncli=%d\n", mycpu()->ncli);
+
   if (!cas(&curproc->state, RUNNING, -ZOMBIE))
     panic("cant cas from running to -zombie in exit");
   // Parent might be sleeping in wait().
@@ -342,6 +351,14 @@ int wait(void)
 
   // cas_push(&used);
   pushcli();
+ // cprintf("pushcli wait ncli=%d\n", mycpu()->ncli);
+
+  // Go to sleep.
+  curproc->chan = (void*)curproc; 
+  while(curproc->state==-RUNNING){}
+  if(!cas(&curproc->state, RUNNING, -SLEEPING)){
+   panic("cant move from running to -sleeping in sleep");
+  }
   for (;;)
   {
     // Scan through table looking for exited children.
@@ -353,7 +370,7 @@ int wait(void)
       havekids = 1;
       if(p->state == ZOMBIE || p->state == -ZOMBIE){
         while (p->state == -ZOMBIE){}
-        if (cas(&p->state, ZOMBIE, -UNUSED))
+        if (cas(&p->state, ZOMBIE, _UNUSED))
         {
           // Found one.
           pid = p->pid;
@@ -364,7 +381,10 @@ int wait(void)
           p->parent = 0;
           p->name[0] = 0;
           p->killed = 0;
-          if (!cas(&p->state, -UNUSED, UNUSED))
+          if(!cas(&curproc->state, -SLEEPING, RUNNING)){
+            panic("cant cas from -SLEEPING to RUNNING in wait");
+          }
+          if (!cas(&p->state, _UNUSED, UNUSED))
             panic("cant cas from -unuesed to unused in wait");
           // cas_pop(&used);
           popcli();
@@ -377,12 +397,15 @@ int wait(void)
     if (!havekids || curproc->killed)
     {
       // cas_pop(&used);
+      if(!cas(&curproc->state, -SLEEPING, RUNNING)){
+        panic("cant cas from -SLEEPING to RUNNING in wait");
+      }
       popcli();
       return -1;
     }
 
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-    sleep(curproc, &ptable.lock); //DOC: wait-sleep
+    local_sleep(curproc); //DOC: wait-sleep
   }
 }
 
@@ -415,6 +438,8 @@ void scheduler(void)
     // Loop over process table looking for process to run.
     // cas_push(&used);
     pushcli();
+   // cprintf("pushcli scheduler ncli=%d\n", mycpu()->ncli);
+
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     {
       if(
@@ -428,7 +453,7 @@ void scheduler(void)
                                                 p->state== RUNNABLE) ||
         (p->sigkill_bit_is_up && (p->state== RUNNABLE || p->state == SLEEPING))
         )
-        {
+        {  
           if (!cas(&p->state, RUNNABLE, RUNNING))
             panic("cant move from -running to running in scheduler");
           //todo - maybe change without -running?
@@ -453,11 +478,11 @@ void scheduler(void)
           if(!cas(&p->state, -RUNNABLE, RUNNABLE)){}
             // panic("cant move from -runnable to runnable in scheduler");
 
-          // after call from sleep
+          // after call from sleep or wait
           if(!cas(&p->state, -SLEEPING, SLEEPING)){
             // panic("cant move from -sleeping to sleeping in sleep");
           }
-          
+
           // from exit
           if (cas(&p->state, -ZOMBIE, ZOMBIE))
             wakeup1(p->parent);
@@ -484,8 +509,10 @@ void sched(void)
 
 //  if (!holding(&ptable.lock))
 //    panic("sched ptable.lock");
-  if (mycpu()->ncli != 1)
+  if (mycpu()->ncli != 1){
+   // cprintf("sched locks, ncli == %d", mycpu()->ncli);
     panic("sched locks");
+  }
   if (p->state == RUNNING)
     panic("sched running");
   if (readeflags() & FL_IF)
@@ -500,6 +527,8 @@ void yield(void)
 {
   // cas_push(&used); //DOC: yieldlock
   pushcli();
+ // cprintf("pushcli yield ncli=%d\n", mycpu()->ncli);
+
   while(myproc()->state == -RUNNING){}
   if(!cas(&myproc()->state, RUNNING, -RUNNABLE))
     panic("cant move from running to -runnable in yield");
@@ -549,21 +578,21 @@ void sleep(void *chan, struct spinlock *lk)
   // guaranteed that we won't miss any wakeup
   // (wakeup runs with ptable.lock locked),
   // so it's okay to release lk.
-  pushcli();
-  
-  while(p->state==-RUNNING){}
-  if(!cas(&p->state, RUNNING, -SLEEPING)){
-    panic("cant move from running to -sleeping in sleep");
-  }
+ // cprintf("pushcli sleep ncli=%d\n", mycpu()->ncli);
   
   if (lk != &ptable.lock)
   {                        //DOC: sleeplock0
 //    acquire(&ptable.lock); //DOC: sleeplock1
-      // cas_push(&used);
+    pushcli();
+    // Go to sleep.
+    p->chan = chan;
+    while(p->state==-RUNNING){}
+     if(!cas(&p->state, RUNNING, -SLEEPING)){
+     panic("cant move from running to -sleeping in sleep");
+    }
+    
     release(lk);
   }
-  // Go to sleep.
-  p->chan = chan; // maybe move up
   // p->state = SLEEPING;
 
   sched();
@@ -575,10 +604,31 @@ void sleep(void *chan, struct spinlock *lk)
   if (lk != &ptable.lock)
   { //DOC: sleeplock2
     // cas_pop(&used);
+   // cprintf("lk != ptable.lock2\n");
+    popcli();
     acquire(lk);
   }
-  popcli();
 }
+
+void local_sleep(void *chan)
+{
+  struct proc *p = myproc();
+
+  if (p == 0)
+    panic("sleep");
+
+  // Must acquire ptable.lock in order to
+  // change p->state and then call sched.
+  // Once we hold ptable.lock, we can be
+  // guaranteed that we won't miss any wakeup
+  // (wakeup runs with ptable.lock locked),
+  // so it's okay to release lk.
+  
+  // p->state = SLEEPING;
+
+  sched();
+}
+
 
 //PAGEBREAK!
 // Wake up all processes sleeping on chan.
@@ -591,15 +641,13 @@ wakeup1(void *chan)
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if ((p->state == SLEEPING || p->state == -SLEEPING) && p->chan == chan){
       while(p->state == -SLEEPING){}
-      if(!cas(&p->state, SLEEPING, -RUNNABLE)){
-        panic("cant move from sleeping to -runnable ");
-      }
-      p->chan = 0;
+      if(cas(&p->state, SLEEPING, -RUNNABLE)){
+        p->chan = 0;
       if(!cas(&p->state, -RUNNABLE, RUNNABLE)){
         panic("cant move from -runnable to runnable ");
+      }  
       }
     }
-      
 }
 
 // Wake up all processes sleeping on chan.
@@ -607,6 +655,7 @@ void wakeup(void *chan)
 {
   // cas_push(&used);
   pushcli();
+  // cprintf("pushcli wakup ncli=%d\n", mycpu()->ncli);
   wakeup1(chan);
   popcli();
   // cas_pop(&used);
@@ -639,6 +688,8 @@ int kill(int pid, int signum){
 
   // cas_push(&used);
   pushcli();
+ // cprintf("pushcli kill ncli=%d\n", mycpu()->ncli);
+
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if (p->pid == pid){
         update_pending_signals(p, signum);
@@ -726,6 +777,7 @@ int sigret(void)
   return 0;
 }
 
+//todo if process frozen & sig-cont is blocked -> yield!
 void handle_pending_signals(struct trapframe *tf) {
     struct proc *p = myproc();
     if (p == null) return;
@@ -750,7 +802,7 @@ void handle_pending_signals(struct trapframe *tf) {
                   handle_user_signal(signum);
               }
               // break;
-            }
+            } else if(p->frozen && signum == SIGCONT) yield(); // sigcont is masked
         }
         bit = bit << 1;
     }

@@ -1750,54 +1750,54 @@ main(int argc, char *argv[])
 {
   printf(1, "usertests starting\n");
 
-  if(open("usertests.ran", 0) >= 0){
-    printf(1, "already ran user tests -- rebuild fs.img\n");
-    exit();
-  }
-  close(open("usertests.ran", O_CREATE));
+  // if(open("usertests.ran", 0) >= 0){
+    // printf(1, "already ran user tests -- rebuild fs.img\n");
+    // exit();
+  // }
+  // close(open("usertests.ran", O_CREATE));
 
-  argptest();
-  createdelete();
-  linkunlink();
-  concreate();
-  fourfiles();
-  sharedfd();
+//   argptest();
+//   createdelete();
+//   linkunlink();
+//   concreate();
+//   fourfiles();
+//   sharedfd();
 
-  bigargtest();
-  bigwrite();
-  bigargtest();
-  bsstest();
+//   bigargtest();
+//   bigwrite();
+//   bigargtest();
+//   bsstest();
 
 //  sbrktest();  // fail
 //  validatetest();  // fail
 
-  opentest();
-  writetest();
-  writetest1();
-  createtest();
+//   opentest();
+//   writetest();
+//   writetest1();
+//   createtest();
 
-  openiputtest();
-  exitiputtest();
-  iputtest();
-//
-//  mem();  // fail
-  pipe1();
+//   openiputtest();
+//   exitiputtest();
+//   iputtest();
+// //
+//  mem();  // fai////l
+//   pipe1();
   preempt();
   exitwait();
 
 //  rmdot();
-  fourteen();
-  bigfile();
-  subdir();
-  linktest();
-  unlinkread();
-  dirfile();
-  iref();
-  forktest();
-  bigdir(); // slow
+//   fourteen();
+//   bigfile();
+//   subdir();
+//   linktest();
+//   unlinkread();
+//   dirfile();
+//   iref();
+//   forktest();
+//   bigdir(); // slow
 
-  uio();
-//
+//   uio();
+// //
 //  exectest();
 //
   exit();

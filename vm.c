@@ -120,21 +120,17 @@ setupkvm(void)
 {
   pde_t *pgdir;
   struct kmap *k;
-  cprintf("tahat11\n");
   if((pgdir = (pde_t*)kalloc()) == 0)
     return 0;
-  cprintf("tahat22\n");
   memset(pgdir, 0, PGSIZE);
   if (P2V(PHYSTOP) > (void*)DEVSPACE)
     panic("PHYSTOP too high");
-  cprintf("tahat33\n");
   for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
                 (uint)k->phys_start, k->perm) < 0) {
       freevm(pgdir);
       return 0;
     }
-  cprintf("tahat44\n");
   return pgdir;
 }
 

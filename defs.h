@@ -129,6 +129,7 @@ void            sigret_syscall_finish(void);
 void            update_pending_signals(struct proc*, int);
 void            do_default_action(int);
 void            handle_user_signal(int);
+void local_sleep(void*);
 
 //void            cas_acquire(volatile int *);
 //void            cas_release(volatile int *);
