@@ -2,19 +2,72 @@
 #include "stat.h"
 #include "user.h"
 
-// #define	SIGKILL	9
-// #define	SIGSTOP	17
-// #define	SIGCONT	19
+void kill_while_sleep(){
+    printf(1, "kill_while_sleep\n");
+    uint childpid;
+    if ((childpid = fork()) == 0)
+    {
+        printf(1,"child pid: %d\n",getpid());
+        sleep(100000);
+    }
+    else
+    {
+        sleep(100);
+        printf(1, "father pid: %d\n",getpid());
+        printf(1, "father: send kill\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
 
-// int cchildpid[5];
-// int j;
+void send_sig_stop_and_stop_printing(){
+    printf(1, "send_sig_stop_and_stop_printing\n");
+    uint childpid;
+    if ((childpid = fork()) == 0)
+    {
+        printf(1,"child pid: %d\n",getpid());
+        while(1){
+            printf(1, "alive\n");
+            sleep(5);
+        }
+    }
+    else
+    {
+        sleep(20);
+        printf(1, "father pid: %d\n",getpid());
+        printf(1, "father: send stop\n");
+        kill(childpid, SIGSTOP);
+        
+        sleep(100);
+        
+        printf(1, "father: send kill\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
 
-// void sigcatcher(int signum){
-//     printf("childPID %d caught process. signal number: %d \n",getchildpid());
-//     if (j > -1){
-//         kill(cchildpid[j],SIGKILL);
-//     }
-// }
+void sleeping_and_send_sig_stop(){
+    printf(1, "sleeping_and_send_sig_stop\n");
+    uint childpid;
+    if ((childpid = fork()) == 0)
+    {
+        printf(1,"child pid: %d\n",getpid());
+        sleep(10000000);
+    }
+    else
+    {
+        sleep(20);
+        printf(1, "father pid: %d\n",getpid());
+        printf(1, "father: send stop\n");
+        kill(childpid, SIGSTOP);
+        
+        sleep(100);
+        
+        printf(1, "father: send kill\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
 
 void handler(int sig)
 {
@@ -50,7 +103,7 @@ void test5(){
 }
 int main(int argc, char *argv[])
 {
-    uint s = 10;
+    // uint s = 10;
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = &handler;
@@ -99,34 +152,8 @@ int main(int argc, char *argv[])
     //kill(getchildpid(),4);
     //kill(getchildpid(),5);
 
-    uint childpid;
-    if ((childpid = fork()) == 0)
-    {
-        printf(1,"child pid: %d\n",getpid());
-        // while(1==1){
-        // }
-        sleep(1000000);
-    }
-    else
-    {
-        // printf(1,"father pid: %d\n",getpid());
-        // sleep(s);
-        // kill(childpid, 2);
-        // printf(1,"father: send user \n");
-
-        // sleep(s);
-        // printf(1,"father: send stop \n");
-        // kill(childpid,SIGSTOP);
-
-        // sleep(s*5);
-        // kill(childpid, SIGCONT);
-        // printf(1,"father: send sig cont \n");
-
-        sleep(s*5);
-        printf(1,"father: send kill\n");
-        kill(childpid, SIGKILL);
-        // wait();
-    }
-    
+    kill_while_sleep();
+    send_sig_stop_and_stop_printing();
+    sleeping_and_send_sig_stop();
     exit();
 }
