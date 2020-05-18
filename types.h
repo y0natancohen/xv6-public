@@ -12,6 +12,10 @@ typedef uint pde_t;
 #define	SIGSTOP	17
 #define	SIGCONT	19
 
+#define sigkillpow 512
+#define sigstoppow 131072
+#define sigcontpow 524288
+
 #define SIGNALS_SIZE 32
 
 

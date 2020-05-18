@@ -46,6 +46,36 @@ void send_sig_stop_and_stop_printing(){
     }
 }
 
+void send_sig_stop_and_stop_printing_cont_and_continue(){
+    printf(1, "send_sig_stop_and_stop_printing_cont_and_continue\n");
+    uint childpid;
+    if ((childpid = fork()) == 0)
+    {
+        printf(1,"child pid: %d\n",getpid());
+        while(1){
+            printf(1, "alive\n");
+            sleep(5);
+        }
+    }
+    else
+    {
+        sleep(20);
+        printf(1, "father pid: %d\n",getpid());
+        printf(1, "father: send stop\n");
+        kill(childpid, SIGSTOP);
+        
+        sleep(100);
+        
+        printf(1, "father: send cont (now should print)\n");
+        kill(childpid, SIGCONT);
+        sleep(20);
+        
+        printf(1, "father: send kill\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
 void sleeping_and_send_sig_stop(){
     printf(1, "sleeping_and_send_sig_stop\n");
     uint childpid;
@@ -63,6 +93,67 @@ void sleeping_and_send_sig_stop(){
         
         sleep(100);
         
+        printf(1, "father: send kill\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+void test_block_sigcont(){
+    printf(1, "test_block_sigcont\n");
+    uint childpid;
+    sigprocmask(sigcontpow);
+    if ((childpid = fork()) == 0)
+    {
+        printf(1,"child pid: %d\n",getpid());
+        while(1){
+            printf(1, "alive\n");
+        }
+    }
+    else
+    {
+        sleep(10);
+        printf(1, "father pid: %d\n",getpid());
+        printf(1, "father: send stop\n");
+        kill(childpid, SIGSTOP);
+        
+        sleep(100);
+        printf(1, "father: send cont(blocked)\n");
+        kill(childpid, SIGCONT);
+        sleep(50);
+        printf(1, "father: send kill\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+void test_ignore_sigcont(){
+    printf(1, "test_ignore_sigcont\n");
+    uint childpid;
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = (void *)SIG_IGN;
+    sa.sigmask = 0;
+
+    sigaction(SIGCONT, &sa, null);
+    if ((childpid = fork()) == 0)
+    {
+        printf(1,"child pid: %d\n",getpid());
+        while(1){
+            printf(1, "alive\n");
+        }
+    }
+    else
+    {
+        sleep(10);
+        printf(1, "father pid: %d\n",getpid());
+        printf(1, "father: send stop\n");
+        kill(childpid, SIGSTOP);
+        
+        sleep(100);
+        printf(1, "father: send cont(ignored)\n");
+        kill(childpid, SIGCONT);
+        sleep(50);
         printf(1, "father: send kill\n");
         kill(childpid, SIGKILL);
         wait();
@@ -153,7 +244,15 @@ int main(int argc, char *argv[])
     //kill(getchildpid(),5);
 
     kill_while_sleep();
+    printf(1,"\n");
     send_sig_stop_and_stop_printing();
+    printf(1,"\n");
     sleeping_and_send_sig_stop();
+    printf(1,"\n");
+    send_sig_stop_and_stop_printing_cont_and_continue();
+    printf(1,"\n");
+    test_block_sigcont();
+    printf(1,"\n");
+    test_ignore_sigcont();
     exit();
 }
