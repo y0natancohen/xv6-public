@@ -1750,11 +1750,11 @@ main(int argc, char *argv[])
 {
   printf(1, "usertests starting\n");
 
-  if(open("usertests.ran", 0) >= 0){
-    printf(1, "already ran user tests -- rebuild fs.img\n");
-    exit();
-  }
-  close(open("usertests.ran", O_CREATE));
+//  if(open("usertests.ran", 0) >= 0){
+//    printf(1, "already ran user tests -- rebuild fs.img\n");
+//    exit();
+//  }
+//  close(open("usertests.ran", O_CREATE));
 
   argptest();
   createdelete();

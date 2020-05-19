@@ -203,7 +203,7 @@ void test_user_signal_blocked() {
         sleep(100);
         printf(1, "father: killing child\n");
         kill(childpid, SIGKILL);
-//        wait();
+        wait();
     }
 }
 
@@ -223,8 +223,9 @@ int main(int argc, char *argv[]) {
 //    test_ignore_sigcont();
 //    printf(1, "\n");
 //    test_user_signal();
-    printf(1, "\n");
+//    printf(1, "\n");
     test_user_signal_blocked();
+    printf(1, "\n");
 
     exit();
 }
