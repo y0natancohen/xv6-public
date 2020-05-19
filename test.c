@@ -7,14 +7,20 @@ void handler1(int signum) {
     printf(1, "handler 1, signum: %d\n", signum);
     while (1) {
         printf(1, "handler 1 alive\n");
-        sleep(5);
+        sleep(10);
     }
 }
 
-void handler2_and_exit(int signum) {
-    printf(1, "handler 2, signum: %d, now exiting...\n", signum);
+void handler2(int signum) {
+    printf(1, "handler 2, signum: %d\n", signum);
+}
+
+void handler3_and_exit(int signum) {
+    printf(1, "handler 3, signum: %d, now exiting...\n", signum);
     exit();
 }
+
+
 
 void kill_while_sleep() {
     printf(1, "kill_while_sleep\n");
@@ -163,7 +169,10 @@ void test_user_signal() {
     uint childpid;
     struct sigaction sa;
     sa.sigmask = 0;
-    sa.sa_handler = &handler2_and_exit;
+    sa.sa_handler = &handler3_and_exit;
+    sigaction(3, &sa, null);
+
+    sa.sa_handler = &handler2;
     sigaction(2, &sa, null);
 
     if ((childpid = fork()) == 0) {
@@ -176,6 +185,98 @@ void test_user_signal() {
         // printf(1, "father pid: %d\n", getpid());
         printf(1, "father: send user signal 2\n");
         kill(childpid, 2);
+        printf(1, "father: send user signal 3 and exit\n");
+        kill(childpid, 3);
+        wait();
+    }
+}
+
+void test_sa_mask() {
+    printf(1, "test_sa_mask\n");
+    uint childpid;
+    struct sigaction sa;
+    sa.sigmask = 0;
+
+    sa.sigmask = 8;
+    sa.sa_handler = &handler1;
+    sigaction(1, &sa, null);
+
+    sa.sigmask = 0;
+    sa.sa_handler = &handler3_and_exit;
+    sigaction(3, &sa, null);
+
+    sigprocmask(8);
+
+    if ((childpid = fork()) == 0) {
+        // printf(1, "child pid: %d\n", getpid());
+        while (1) {
+//            printf(1, "alive\n");
+            sleep(5);
+        }
+    } else {
+        sleep(10);
+
+//        printf(1, "father: sending user signal 3 (blocked)\n");
+//        kill(childpid, 3);
+//        sleep(100);
+
+        printf(1, "father: send user signal 1\n");
+        kill(childpid, 1);
+        sleep(100);
+
+        printf(1, "father: sending user signal 3 (blocked inside handler)\n");
+        kill(childpid, 3);
+        sleep(100);
+
+        printf(1, "father: killing child\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+void test_mask_backup() {
+    printf(1, "test_mask_backup\n");
+    uint childpid;
+    struct sigaction sa;
+    sa.sigmask = 0;
+
+    sa.sigmask = 16;
+    sa.sa_handler = &handler2;
+    sigaction(2, &sa, null);
+
+    sa.sigmask = 0;
+    sa.sa_handler = &handler3_and_exit;
+    sigaction(3, &sa, null);
+
+    sigprocmask(8);
+
+    if ((childpid = fork()) == 0) {
+        // printf(1, "child pid: %d\n", getpid());
+        while (1) {
+//            printf(1, "alive\n");
+            sleep(5);
+        }
+    } else {
+        sleep(10);
+
+//        printf(1, "father: sending user signal 3 (blocked)\n");
+//        kill(childpid, 3);
+//        sleep(100);
+
+        printf(1, "father: send user signal 2\n");
+        kill(childpid, 2);
+        sleep(20);
+
+        printf(1, "father: send user signal 2 again\n");
+        kill(childpid, 2);
+        sleep(20);
+
+        printf(1, "father: sending user signal 3 (blocked after backup handler)\n");
+        kill(childpid, 3);
+        sleep(100);
+
+        printf(1, "father: killing child\n");
+        kill(childpid, SIGKILL);
         wait();
     }
 }
@@ -185,10 +286,10 @@ void test_user_signal_blocked() {
     uint childpid;
     struct sigaction sa;
     sa.sigmask = 0;
-    sa.sa_handler = &handler2_and_exit;
-    sigaction(2, &sa, null);
+    sa.sa_handler = &handler3_and_exit;
+    sigaction(3, &sa, null);
 
-    sigprocmask(4);
+    sigprocmask(8);
 
     if ((childpid = fork()) == 0) {
         // printf(1, "child pid: %d\n", getpid());
@@ -198,9 +299,9 @@ void test_user_signal_blocked() {
     } else {
         sleep(10);
         // printf(1, "father pid: %d\n", getpid());
-        printf(1, "father: send user signal 2 (blocked)\n");
-        kill(childpid, 2);
-        sleep(100);
+        printf(1, "father: send user signal 3 (blocked)\n");
+        kill(childpid, 3);
+        sleep(10);
         printf(1, "father: killing child\n");
         kill(childpid, SIGKILL);
         wait();
@@ -210,65 +311,25 @@ void test_user_signal_blocked() {
 
 
 int main(int argc, char *argv[]) {
-//    kill_while_sleep();
-//    printf(1, "\n");
-//    send_sig_stop_and_stop_printing();
-//    printf(1, "\n");
-//    sleeping_and_send_sig_stop();
-//    printf(1, "\n");
-//    send_sig_stop_and_stop_printing_cont_and_continue();
-//    printf(1, "\n");
-//    test_block_sigcont();
-//    printf(1, "\n");
-//    test_ignore_sigcont();
-//    printf(1, "\n");
-//    test_user_signal();
-//    printf(1, "\n");
+    kill_while_sleep();
+    printf(1, "\n");
+    send_sig_stop_and_stop_printing();
+    printf(1, "\n");
+    sleeping_and_send_sig_stop();
+    printf(1, "\n");
+    send_sig_stop_and_stop_printing_cont_and_continue();
+    printf(1, "\n");
+    test_block_sigcont();
+    printf(1, "\n");
+    test_ignore_sigcont();
+    printf(1, "\n");
+    test_user_signal();
+    printf(1, "\n");
     test_user_signal_blocked();
     printf(1, "\n");
-
+    test_sa_mask();
+    printf(1, "\n");
+    test_mask_backup();
+    printf(1, "\n");
     exit();
 }
-
-//sa.sa_handler = &handler;
-
-// trying to override SIGSTOP default handler - forbidden!
-// int res = sigaction(SIGSTOP, &sa, null);
-// printf(1, "syscall sigaction res: %d\n", res);
-
-// trying to override SIGKILL default handler - forbidden!
-// int res = sigaction(SIGKILL, &sa, null);
-// printf(1, "syscall sigaction res: %d\n", res);
-
-// trying to block SIGSTOP signal - forbidden!
-// uint oldMask = sigprocmask(512);
-// printf(1, "old mask is: %d\n", oldMask);
-
-// trying to block SIGKILL signal - forbidden!
-// uint oldMask = sigprocmask(131072);
-// printf(1, "old mask is: %d\n", oldMask);
-
-// trying to ignore SIGCONT signal - allowed!
-// int res = sigaction(SIGCONT, &sa, null);
-// printf(1, "syscall sigaction res: %d\n", res);
-
-// trying to block SIGCONT signal - allowed!
-// printf(1, "blocking cont sig\n");
-
-// sigprocmask(524288); // block sigcont
-// sigprocmask(4); // block user
-// printf(1, "old mask is: %d\n", oldMask);
-
-// assign sig number=2 signal to user handler
-// sigaction(SIGCONT, &sa, null);
-// printf(1, "registered user action to SIGCONT(19)\n");
-// block user handled signal
-// sigprocmask(4);
-
-// sigaction(3, &sa, null);
-// sa.sa_handler = &handler;
-// sigaction(4, &sa, null);
-// sa.sa_handler = &handler2;
-// sigaction(5, &sa, null);
-//kill(getchildpid(),4);
-//kill(getchildpid(),5);
