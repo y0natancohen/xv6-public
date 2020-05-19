@@ -288,6 +288,49 @@ void test_unoverridable_sigstop() {
     }
 }
 
+void test_unignoreableable_sigkill() {
+    printf(1, "test_unignoreableable_sigkill\n");
+    uint childpid;
+    struct sigaction sa;
+    sa.sa_handler = (void*)SIG_IGN;
+    sa.sigmask = 0;
+    sigaction(SIGKILL, &sa, null);
+
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            printf(1, "alive\n");
+        }
+    } else {
+        sleep(20);
+        printf(1, "father: killing child\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+void test_unignoreable_sigstop() {
+    printf(1, "test_unoverridable_sigstop\n");
+    uint childpid;
+    struct sigaction sa;
+    sa.sa_handler = (void*)SIG_IGN;
+    sa.sigmask = 0;
+    sigaction(SIGSTOP, &sa, null);
+
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            printf(1, "alive\n");
+        }
+    } else {
+        sleep(20);
+        printf(1, "father: stopping child\n");
+        kill(childpid, SIGSTOP);
+        sleep(20);
+        printf(1, "father: killing child\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
 void test_default_handling_for_non_kernel_signals() {
     printf(1, "*****\ntest_default_handling_for_non_kernel_signals\n*****\n");
     uint childpid;
@@ -334,7 +377,7 @@ int main(int argc, char *argv[]) {
     // test_unoverridable_sigstop();
     // printf(1, "\n");
     // test_default_handling_for_non_kernel_signals();
-    
+    test_unignoreableable_sigkill();
 
     exit();
 }
