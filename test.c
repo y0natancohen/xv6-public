@@ -458,45 +458,93 @@ void test_default_handling_for_non_kernel_signals() {
 }
 
 
+void test_user_signal_default_kill() {
+    printf(1, "test_user_signal_default_kill\n");
+    uint childpid;
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            sleep(5);
+            printf(1, "alive\n");
+        }
+    } else {
+        sleep(20);
+        // printf(1, "father pid: %d\n", getpid());
+        printf(1, "father: send user signal 2 (default, should kill)\n");
+        kill(childpid, 2);
+        wait();
+    }
+}
+
+
+void test_old_act_handler() {
+    printf(1, "test_old_act_handler\n");
+//    uint childpid;
+    struct sigaction sa, old_sa;
+    sa.sa_handler = (void*)SIG_DFL;
+    sa.sigmask = 4;
+    sigaction(2, &sa, null);
+    printf(1, "signum %d mask: %d, handler: %d\n", 2, sa.sigmask, sa.sa_handler);
+
+    sa.sigmask = 8;
+    sa.sa_handler = (void*) SIG_IGN;
+
+    sigaction(2, &sa, &old_sa);
+    printf(1, "new handler -> signum %d mask: %d, handler: %d\n", 2, sa.sigmask, sa.sa_handler);
+    printf(1, "old handler -> signum %d mask: %d, handler: %d (should be %d %d)\n",
+            2, old_sa.sigmask, old_sa.sa_handler, 4, SIG_DFL);
+}
+
+
 int main(int argc, char *argv[]) {
-    kill_while_sleep();
-    printf(1, "\n");
-    send_sig_stop_and_stop_printing();
-    printf(1, "\n");
-    sleeping_and_send_sig_stop();
-    printf(1, "\n");
-    send_sig_stop_and_stop_printing_cont_and_continue();
-    printf(1, "\n");
-    test_block_sigcont();
-    printf(1, "\n");
-    test_ignore_sigcont();
-    printf(1, "\n");
-    test_user_signal();
-    printf(1, "\n");
-    test_user_signal_blocked();
-    printf(1, "\n");
-    test_sa_mask();
-    printf(1, "\n");
-    test_mask_backup();
+//    kill_while_sleep();
+//    printf(1, "\n");
+//    send_sig_stop_and_stop_printing();
+//    printf(1, "\n");
+//    sleeping_and_send_sig_stop();
+//    printf(1, "\n");
+//    send_sig_stop_and_stop_printing_cont_and_continue();
+//    printf(1, "\n");
+//    test_block_sigcont();
+//    printf(1, "\n");
+//    test_ignore_sigcont();
+//    printf(1, "\n");
+//    test_user_signal();
+//    printf(1, "\n");
+//    test_user_signal_blocked();
+//    printf(1, "\n");
+//    test_sa_mask();
+//    printf(1, "\n");
+//    test_mask_backup();
+//    printf(1, "\n");
+//
+//    test_unblockable_sigkill();
+//    printf(1, "\n");
+
+
+//    test_unblockable_sigstop();
+//    printf(1, "\n");
+//    test_unoverridable_sigkill();
+//    printf(1, "\n");
+//    test_unoverridable_sigstop();
+//    printf(1, "\n");
+//    test_default_handling_for_non_kernel_signals();
+//    printf(1, "\n");
+//    test_unignoreable_sigstop();
+//    printf(1, "\n");
+//    test_unignoreableable_sigkill();
+//    printf(1, "\n");
+//    test_user_signal_default_kill();
+//    printf(1, "\n");
+    test_old_act_handler();
     printf(1, "\n");
 
-    test_unblockable_sigkill();
-    printf(1, "\n");
+
 
 //    for(int i =0; i <20; i++){
 //        test_unblockable_sigstop();
 //        printf(1, "\n");
 //    }
 
-    test_unblockable_sigstop();
-    printf(1, "\n");
-    test_unoverridable_sigkill();
-    printf(1, "\n");
-    test_unoverridable_sigstop();
-    printf(1, "\n");
-    test_default_handling_for_non_kernel_signals();
-    printf(1, "\n");
-    test_unignoreableable_sigkill();
-    printf(1, "\n");
     exit();
+
 }
