@@ -7,7 +7,7 @@ void handler1(int signum) {
     printf(1, "handler 1, signum: %d\n", signum);
     while (1) {
         printf(1, "handler 1 alive\n");
-        sleep(10);
+        sleep(5);
     }
 }
 
@@ -185,6 +185,7 @@ void test_user_signal() {
         // printf(1, "father pid: %d\n", getpid());
         printf(1, "father: send user signal 2\n");
         kill(childpid, 2);
+        sleep(20);
         printf(1, "father: send user signal 3 and exit\n");
         kill(childpid, 3);
         wait();
@@ -222,11 +223,11 @@ void test_sa_mask() {
 
         printf(1, "father: send user signal 1\n");
         kill(childpid, 1);
-        sleep(100);
+        sleep(20);
 
         printf(1, "father: sending user signal 3 (blocked inside handler)\n");
         kill(childpid, 3);
-        sleep(100);
+        sleep(20);
 
         printf(1, "father: killing child\n");
         kill(childpid, SIGKILL);
@@ -310,6 +311,112 @@ void test_user_signal_blocked() {
 
 
 
+
+
+void test_unblockable_sigkill() {
+    printf(1, "test_unblockable_sigkill\n");
+    uint childpid;
+
+    sigprocmask(sigkillpow);
+
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            sleep(5);
+        }
+    } else {
+        printf(1, "father: killing child\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+void test_unblockable_sigstop() {
+    printf(1, "test_unblockable_sigstop\n");
+    uint childpid;
+
+    sigprocmask(sigstoppow);
+
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            printf(1, "alive\n");
+        }
+    } else {
+        sleep(20);
+        printf(1, "father: stopping child\n");
+        kill(childpid, SIGSTOP);
+        sleep(20);
+        printf(1, "father: killing child\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+void test_unoverridable_sigkill() {
+    printf(1, "test_unoverridable_sigkill\n");
+    uint childpid;
+    struct sigaction sa;
+    sa.sa_handler = &handler3_and_exit;
+    sa.sigmask = 0;
+    sigaction(SIGKILL, &sa, null);
+
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            printf(1, "alive\n");
+        }
+    } else {
+        sleep(20);
+        printf(1, "father: killing child\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+void test_unoverridable_sigstop() {
+    printf(1, "test_unoverridable_sigstop\n");
+    uint childpid;
+    struct sigaction sa;
+    sa.sa_handler = &handler3_and_exit;
+    sa.sigmask = 0;
+    sigaction(SIGSTOP, &sa, null);
+
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            printf(1, "alive\n");
+        }
+    } else {
+        sleep(20);
+        printf(1, "father: stopping child\n");
+        kill(childpid, SIGSTOP);
+        sleep(20);
+        printf(1, "father: killing child\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+void test_default_handling_for_non_kernel_signals() {
+    printf(1, "*****\ntest_default_handling_for_non_kernel_signals\n*****\n");
+    uint childpid;
+    struct sigaction sa;
+    sa.sa_handler = (void*)SIG_DFL;
+    sa.sigmask = sigcontpow;
+    sigaction(2, &sa, null);
+
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            printf(1, "alive\n");
+        }
+    } else {
+        sleep(10);
+        printf(1, "father: killing child\n");
+        kill(childpid, 2);
+        wait();
+    }
+}
+
+
+
+
 int main(int argc, char *argv[]) {
     kill_while_sleep();
     printf(1, "\n");
@@ -331,5 +438,23 @@ int main(int argc, char *argv[]) {
     printf(1, "\n");
     test_mask_backup();
     printf(1, "\n");
+
+    test_unblockable_sigkill();
+    printf(1, "\n");
+
+//    for(int i =0; i <20; i++){
+//        test_unblockable_sigstop();
+//        printf(1, "\n");
+//    }
+
+    test_unblockable_sigstop();
+    printf(1, "\n");
+    test_unoverridable_sigkill();
+    printf(1, "\n");
+    test_unoverridable_sigstop();
+    printf(1, "\n");
+    test_default_handling_for_non_kernel_signals();
+    printf(1, "\n");
+
     exit();
 }
