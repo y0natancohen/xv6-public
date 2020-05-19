@@ -133,6 +133,40 @@ void test_block_sigcont() {
     }
 }
 
+void test_block_and_release_usersig() {
+    printf(1, "test_block_and_release_usersig\n");
+    uint childpid;
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = &handler3_and_exit;
+    sa.sigmask = 0;
+    sigaction(2, &sa, null);
+
+    sigprocmask(4);
+    if ((childpid = fork()) == 0) {
+        for (int i=0; i<20; i++) {
+            printf(1, "alive\n");
+        }
+        sigprocmask(0);
+        while (1)
+        {
+            printf(1,"alive2\n");
+        }
+        
+    } else {
+        printf(1, "father: send sig 2(blocked)\n");
+        kill(childpid,2);
+        sleep(5);
+        printf(1,"father: release sig 2..\n");
+        
+        sleep(5);
+        printf(1, "father: send kill\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
 void test_ignore_sigcont() {
     printf(1, "test_ignore_sigcont\n");
     uint childpid;
@@ -158,6 +192,31 @@ void test_ignore_sigcont() {
         printf(1, "father: send cont(ignored)\n");
         kill(childpid, SIGCONT);
         sleep(50);
+        printf(1, "father: send kill\n");
+        kill(childpid, SIGKILL);
+        wait();
+    }
+}
+
+
+void test_ignore_usersig() {
+    printf(1, "test_ignore_usersig\n");
+    uint childpid;
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = (void *) SIG_IGN;
+    sa.sigmask = 0;
+    sigaction(2, &sa, null);
+    
+    if ((childpid = fork()) == 0) {
+        while (1) {
+            printf(1, "alive\n");
+            sleep(5);
+        }
+    } else {
+        printf(1, "father: send user sig 2(ignored)\n");
+        kill(childpid, 2);
+        sleep(400);
         printf(1, "father: send kill\n");
         kill(childpid, SIGKILL);
         wait();
@@ -415,7 +474,7 @@ void test_unignoreableable_sigkill() {
 }
 
 void test_unignoreable_sigstop() {
-    printf(1, "test_unoverridable_sigstop\n");
+    printf(1, "test_unignoreable_sigstop\n");
     uint childpid;
     struct sigaction sa;
     sa.sa_handler = (void*)SIG_IGN;
@@ -430,7 +489,7 @@ void test_unignoreable_sigstop() {
         sleep(20);
         printf(1, "father: stopping child\n");
         kill(childpid, SIGSTOP);
-        sleep(20);
+        sleep(200);
         printf(1, "father: killing child\n");
         kill(childpid, SIGKILL);
         wait();
@@ -534,6 +593,10 @@ int main(int argc, char *argv[]) {
     printf(1, "\n");
     test_old_act_handler();
     printf(1, "\n");
+    test_ignore_usersig();
+    printf(1, "\n");
+    test_block_and_release_usersig();
+
 
     exit();
 

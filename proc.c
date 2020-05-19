@@ -67,11 +67,11 @@ myproc(void) {
 
 int
 allocpid(void) {
-    int pid;
+    int old_pid;
     do {
-        pid = nextpid;
-    } while (!cas(&nextpid, pid, pid + 1));
-    return pid;
+        old_pid = nextpid;
+    } while (!cas(&nextpid, old_pid, old_pid + 1));
+    return old_pid;
 }
 
 //PAGEBREAK: 32
@@ -84,15 +84,15 @@ allocproc(void) {
     struct proc *p;
     char *sp;
     pushcli();
-    // cprintf("pushcli allocproc ncli=%d\n", mycpu()->ncli);
     do {
         for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
             if (p->state == UNUSED)
                 break;
         }
+        // reached last proc with no match
         if (p == &ptable.proc[NPROC]) {
             popcli();
-            return 0; // reached end of ptable
+            return 0;
         }
     } while (!cas(&p->state, UNUSED, EMBRYO));
     popcli();
@@ -264,17 +264,16 @@ void exit(void) {
     end_op();
     curproc->cwd = 0;
 
-    pushcli(); // todo who releases?
+    pushcli();
 
     if (!cas(&curproc->state, RUNNING, -ZOMBIE))
         panic("cant cas from running to -zombie in exit");
     // Parent might be sleeping in wait().
-    // wakeup1(curproc->parent); --> in s ch ed
+    // wakeup1(curproc->parent); --> in  sch eduler
 
     // Pass abandoned children to init.
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
         if (p->parent == curproc) {
-            // if(p->parent->pid == curproc->pid) panic("im like my father");
             p->parent = initproc;
             if (p->state == ZOMBIE || p->state == -ZOMBIE) {
                 while (p->state == -ZOMBIE) {}
@@ -286,7 +285,7 @@ void exit(void) {
     // Jump into the sche duler, never to return.
     // curproc->state = ZOMBIE;
     // if (!cas(&curproc->state, -ZOMBIE, ZOMBIE))
-    //   panic("cant cas from -zombie to zombie in exit"); --> in sche d
+    //   panic("cant cas from -zombie to zombie in exit"); --> in sche duler
     sched();
     panic("zombie exit");
 }
@@ -301,9 +300,8 @@ int wait(void) {
     pushcli();
     for (;;) {
         // Go to sleep.
-        // while(curproc->state==-RUNNING){}
-        if (!cas(&curproc->state, RUNNING, -SLEEPING)) {
-            panic("cant move from running to -sleeping in sleep");
+        if (!cas(&curproc->state, RUNNING, -SLEEPING)) { // protect the below logic of clearing zombies kids
+            panic("wait: cant move from running to -sleeping in sleep");
         }
         curproc->chan = (void *) curproc;
         // Scan through table looking for exited children.
@@ -312,7 +310,6 @@ int wait(void) {
             if (p->parent != curproc)
                 continue;
             havekids = 1;
-            // cprintf("wait - found kids\n");
             if (p->state == ZOMBIE || p->state == -ZOMBIE) {
                 while (p->state == -ZOMBIE) {}
                 if (cas(&p->state, ZOMBIE, _UNUSED)) {
@@ -324,15 +321,12 @@ int wait(void) {
                     p->pid = 0;
                     p->parent = 0;
                     p->name[0] = 0;
-                    // cprintf("wait pid: %d killed: %d", p->pid, p->killed);
                     int killed;
                     do {
                         killed = p->killed;
                     } while (!cas(&p->killed, killed, 0));
-                    // p->killed = 0;
-                    // cprintf("wait pid: %d killed: %d", p->pid, p->killed);
                     curproc->chan = 0;
-                    if (!cas(&curproc->state, -SLEEPING, RUNNING)) {
+                    if (!cas(&curproc->state, -SLEEPING, RUNNING)) { // no running kids so no need to sleep
                         panic("cant cas from -SLEEPING to RUNNING in wait");
                     }
                     if (!cas(&p->state, _UNUSED, UNUSED)) {
@@ -355,8 +349,7 @@ int wait(void) {
         }
 
         // Wait for children to exit.  (See wakeup1 call in proc_exit.)
-        // local_sleep(curproc); //DOC: wait-sleep
-        sched();
+         local_sleep(curproc); //DOC: wait-sleep
     }
 }
 
@@ -394,28 +387,25 @@ void scheduler(void) {
                     (p->sigkill_bit_is_up || p->killed)  ||
                 (p->frozen && p->sigcont_bit_is_up && !sigblocked(p, SIGCONT) && !sigignored(p, SIGCONT))
                     ) {
-                // cprintf("scheduler:  pid: %d, state: %d, killbit: %d\n", p->pid,p->state,p->sigkill_bit_is_up );
                 if (cas(&p->state, RUNNABLE, RUNNING)) {
                     if (p->sigkill_bit_is_up) {
-                        // cprintf("handle pid: %d killed: %d", p->pid, p->killed);
+
                         int killed;
                         do {
                             killed = p->killed;
                         } while (!cas(&p->killed, killed, 1));
-                        // p->killed = 1;
+
                         uint sigkillbit;
                         do {
                             sigkillbit = p->sigkill_bit_is_up;
                         } while (!cas(&p->sigkill_bit_is_up, sigkillbit, 0));
+
                     }
                     // Switch to chosen process.  It is the process's job
                     // to release ptable.lock and then reacquire it
                     // before jumping back to us.
                     c->proc = p;
                     switchuvm(p);
-                    // p->state = RUNNING;
-                    // if (!cas(&p->state, -RUNNING, RUNNING))
-                    // panic("cant move from -running to running in scheduler");
                     swtch(&(c->scheduler), p->context);
                     switchkvm();
                     // Process is done running for now.
@@ -426,15 +416,11 @@ void scheduler(void) {
                     if (!cas(&p->state, -RUNNABLE, RUNNABLE)) {}
 
                     // after call from sleep or wait
-                    if (cas(&p->state, -SLEEPING, SLEEPING)) {
-                        // todo: check asaf code here
-                        //  todo also from itay maybe do here ->   if(sigkillbit){RUNNABLE}
-                    }
+                    if (cas(&p->state, -SLEEPING, SLEEPING)) {}
+
                     // from exit
-                    // if(p->state == -ZOMBIE){
                     if (cas(&p->state, -ZOMBIE, ZOMBIE)) {
                         wakeup1(p->parent);
-                        // }
                     }
                 }
             }
@@ -454,8 +440,6 @@ void sched(void) {
     int intena;
     struct proc *p = myproc();
 
-//  if (!holding(&ptable.lock))
-//    panic("sched ptable.lock");
     if (mycpu()->ncli != 1) {
         panic("sched locks");
     }
@@ -471,7 +455,6 @@ void sched(void) {
 // Give up the CPU for one scheduling round.
 void yield(void) {
     pushcli();
-    // while(myproc()->state == -RUNNING){}
     if (!cas(&myproc()->state, RUNNING, -RUNNABLE))
         panic("cant move from running to -runnable in yield");
     sched();
@@ -516,7 +499,6 @@ void sleep(void *chan, struct spinlock *lk) {
     // so it's okay to release lk.
     pushcli();
     p->chan = chan;
-    // while(p->state==-RUNNING){} // todo hashud
     if (!cas(&p->state, RUNNING, -SLEEPING)) {
         panic("cant move from running to -sleeping in sleep");
     }
@@ -536,10 +518,6 @@ void sleep(void *chan, struct spinlock *lk) {
 }
 
 void local_sleep(void *chan) {
-    struct proc *p = myproc();
-
-    if (p == 0)
-        panic("sleep");
 
     // Must acquire ptable.lock in order to
     // change p->state and then call sched.
@@ -599,7 +577,6 @@ int set_sigaction(int signum, const struct sigaction *act, struct sigaction *old
 // Process won't exit until it returns
 // to user space (see trap in trap.c).
 int kill(int pid, int signum) {
-    // cprintf("in kill(), pid: %d, signum: %d\n", pid, signum);
     if (signum < 0 || signum > 31) return -1;
 
     struct proc *p;
@@ -608,7 +585,6 @@ int kill(int pid, int signum) {
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
         if (p->pid == pid) {
             update_pending_signals(p, signum);
-            // Wake process from sleep if necessary.  -> done in do_default_action
             popcli();
             return 0;
         }
@@ -628,29 +604,22 @@ void update_pending_signals(struct proc *p, int signum) {
 
     uint sigcontbit;
     if (signum == SIGCONT) {
-        // cprintf("signum == SIGCONT: id: %d, state: %d, contbit: %d\n", p->pid,p->state,p->sigcont_bit_is_up);
 
-        // p->sigcont_bit_is_up = 1;
         do {
             sigcontbit = p->sigcont_bit_is_up;
         } while (!cas(&p->sigcont_bit_is_up, sigcontbit, 1));
-        // cprintf("signum == SIGCONT: id: %d, state: %d, contbit: %d\n", p->pid,p->state,p->sigcont_bit_is_up);
     }
     uint sigkillbit;
     if (signum == SIGKILL 
         || ((int)p->signal_handlers[signum].sa_handler == SIG_DFL && signum!=SIGCONT && signum!=SIGSTOP)) {
-        // cprintf("kill - id: %d, state: %d, killbit: %d\n", p->pid,p->state,p->sigkill_bit_is_up );
 
-        // p->sigkill_bit_is_up = 1;
         do {
             sigkillbit = p->sigkill_bit_is_up;
         } while (!cas(&p->sigkill_bit_is_up, sigkillbit, 1));
-        // cprintf("kill - id: %d, state: %d, killbit: %d\n", p->pid,p->state,p->sigkill_bit_is_up );
-        if (p->state == SLEEPING || p->state == -SLEEPING) {
-            // if(p->pid>2) cprintf("wakeup pid: %d for kill, upSignals: %d, state : %d\n", p->pid, p->pending_signals, p->state);
+
+        if (p->state == SLEEPING || p->state == -SLEEPING) { // wakup for kill
             while (p->state == -SLEEPING) {}
-            if (!cas(&p->state, SLEEPING, RUNNABLE)) {} // panic("lo tov");
-            // else cprintf("pid: %d woke up in kill. state:%d\n",p->pid, p->state);
+            if (!cas(&p->state, SLEEPING, RUNNABLE)) {} // if not, wakeup was done by someone else
         }
     }
 }
@@ -660,21 +629,14 @@ void update_pending_signals(struct proc *p, int signum) {
 // Runs when user types ^P on console.
 // No lock to avoid wedging a stuck machine further.
 void procdump(void) {
-    // UNUSED, _UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE
     static char *states[] = {
             [UNUSED] "unused",
             [_UNUSED] "_UNUSED",
             [EMBRYO] "embryo",
-            // [-EMBRYO] "-embryo",
             [SLEEPING] "sleep ",
-            // [-SLEEPING] "-sleep ",
             [RUNNABLE] "runble",
-            // [-RUNNABLE] "-runble",
             [RUNNING] "run   ",
-            // [-RUNNING] "-run   ",
-            // [-ZOMBIE] "-zombie",
             [ZOMBIE] "zombie"};
-    //[FROZEN] "frozen"};
     int i;
     struct proc *p;
     char *state;
@@ -687,7 +649,9 @@ void procdump(void) {
             state = states[p->state];
         else
             state = "???";
-        cprintf("pid: %d state: %s pname: %s, forzen: %d, sigkillbit: %d, killed: %d     ", p->pid, state, p->name, p->frozen, p->sigkill_bit_is_up, p->killed);
+        cprintf("pid: %d state: %s pname: %s, forzen: %d, sigkillbit: %d, killed: %d     ",
+                p->pid, state, p->name, p->frozen, p->sigkill_bit_is_up, p->killed);
+
         if (p->state == SLEEPING) {
             getcallerpcs((uint *) p->context->ebp + 2, pc);
             for (i = 0; i < 10 && pc[i] != 0; i++)
@@ -706,78 +670,47 @@ int sigret(void) {
     return 0;
 }
 
-//todo if process frozen & sig-cont is blocked -> yield!
 void handle_pending_signals(struct trapframe *tf) {
     struct proc *p = myproc();
     if (p == null) return;
-    // if(p->pid == 4) cprintf("handle_ pid: %d, pstate: %d, killed: %d, sigkillup: %d, pending: %d\n",
-    // p->pid, p->state, p->killed, p->sigkill_bit_is_up, p->pending_signals);
 
     if (p->got_user_signal) return;
-    if (p->sigkill_bit_is_up == 0 && (tf->cs & 3) != DPL_USER) return; // CPU in user mode
+    if (p->sigkill_bit_is_up == 0 && (tf->cs & 3) != DPL_USER) return;
     if (p->pending_signals == 0) return;
     uint bit = 1;
     for (int signum = 0; signum < SIGNALS_SIZE; signum++) {
         if ((bit & p->pending_signals) > 0) {
             if ((((~p->signal_mask) & bit) > 0) || signum == SIGKILL || signum == SIGSTOP) {
-                
-                // p->pending_signals = p->pending_signals & (~bit); // shutdown bit
                 uint pending;
                 do {
                     pending = p->pending_signals;
                 } while (!cas(&p->pending_signals, pending, pending & (~bit)));
 
                 if ((int) p->signal_handlers[signum].sa_handler == SIG_DFL) {
-
                     do_default_action(signum, p);
                 } else if ((int) p->signal_handlers[signum].sa_handler == SIG_IGN) {
                     // ignore
                 } else {
                     handle_user_signal(signum);
                 }
-                // break;
-
             }
-            // else if(p->frozen && signum == SIGCONT) {
-            //yield() covered in if of sceduler
-
-            // } // sigcont is masked
         }
         bit = bit << 1;
     }
 }
 
 void do_default_action(int signum, struct proc *p) {
-    if (signum == SIGKILL) {
-        // cprintf("handle pid: %d killed: %d", p->pid, p->killed);
-        // int killed;
-        // do {
-        //   killed = p->killed;
-        // } while (!cas(&p->killed, killed, 1));
-        // // p->killed = 1;
-        // uint sigkillbit;
-        // do {
-        //   sigkillbit = p->sigkill_bit_is_up;
-        // } while (!cas(&p->sigkill_bit_is_up, sigkillbit, 0));
-        // // p->sigkill_bit_is_up = 0;
-        // cprintf("handle pid: %d killed: %d", p->pid, p->killed);
-    } else if (signum == SIGCONT) {
+    // kill is done in sch eduler
+    if (signum == SIGCONT) {
         p->frozen = 0;
         uint sigcontbit;
         do {
             sigcontbit = p->sigcont_bit_is_up;
         } while (!cas(&p->sigcont_bit_is_up, sigcontbit, 0));
 
-        // p->sigcont_bit_is_up = 0;
     } else if (signum == SIGSTOP) {
         p->frozen = 1;
         yield();
-    } else {
-        // p->killed = 1; //todo change to cas
-        // uint sigkillbit;
-        // do {
-        //   sigkillbit = p->sigkill_bit_is_up;
-        // } while (!cas(&p->sigkill_bit_is_up, sigkillbit, 0));
     }
 }
 
