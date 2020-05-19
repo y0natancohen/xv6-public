@@ -637,7 +637,8 @@ void update_pending_signals(struct proc *p, int signum) {
         // cprintf("signum == SIGCONT: id: %d, state: %d, contbit: %d\n", p->pid,p->state,p->sigcont_bit_is_up);
     }
     uint sigkillbit;
-    if (signum == SIGKILL) {
+    if (signum == SIGKILL 
+        || ((int)p->signal_handlers[signum].sa_handler == SIG_DFL && signum!=SIGCONT && signum!=SIGSTOP)) {
         // cprintf("kill - id: %d, state: %d, killbit: %d\n", p->pid,p->state,p->sigkill_bit_is_up );
 
         // p->sigkill_bit_is_up = 1;
@@ -719,6 +720,7 @@ void handle_pending_signals(struct trapframe *tf) {
     for (int signum = 0; signum < SIGNALS_SIZE; signum++) {
         if ((bit & p->pending_signals) > 0) {
             if ((((~p->signal_mask) & bit) > 0) || signum == SIGKILL || signum == SIGSTOP) {
+                
                 // p->pending_signals = p->pending_signals & (~bit); // shutdown bit
                 uint pending;
                 do {
@@ -726,6 +728,7 @@ void handle_pending_signals(struct trapframe *tf) {
                 } while (!cas(&p->pending_signals, pending, pending & (~bit)));
 
                 if ((int) p->signal_handlers[signum].sa_handler == SIG_DFL) {
+
                     do_default_action(signum, p);
                 } else if ((int) p->signal_handlers[signum].sa_handler == SIG_IGN) {
                     // ignore
@@ -764,6 +767,7 @@ void do_default_action(int signum, struct proc *p) {
         do {
             sigcontbit = p->sigcont_bit_is_up;
         } while (!cas(&p->sigcont_bit_is_up, sigcontbit, 0));
+
         // p->sigcont_bit_is_up = 0;
     } else if (signum == SIGSTOP) {
         p->frozen = 1;

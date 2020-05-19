@@ -145,16 +145,16 @@ lcr3(uint val)
 }
 
 inline int cas(volatile void * addr, int expected, int newval) {
-    int ret = 1;
-    //uint eflags=0;
+    int success = 1;
     asm volatile("lock; cmpxchgl %3, (%2)\n\t"
                  "pushfl\n\t"
                  "popl %0\n\t"
                  "andl $0x40,%0\n\t"
-    : "=m"(ret)
-    : "a"(expected), "b"(addr), "r"(newval)
+                 // 40 in hex brings us the zero flag
+    : "=m"(success)
+    : "a"(expected), "b"(addr), "c"(newval)
     : "memory");
-    return ret;
+    return success;
 }
 
 //PAGEBREAK: 36
