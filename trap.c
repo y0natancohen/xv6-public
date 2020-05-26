@@ -36,7 +36,6 @@ idtinit(void)
 void
 trap(struct trapframe *tf)
 {
-  // cprintf("pid: %d\n", myproc()->pid);
   if(tf->trapno == T_SYSCALL){
     if(myproc()->killed)
       exit();

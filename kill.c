@@ -5,11 +5,13 @@
 int
 main(int argc, char **argv)
 {
+  int i;
 
-  if(argc < 3){
-    printf(2, "usage: kill pid signum...\n");
+  if(argc < 2){
+    printf(2, "usage: kill pid...\n");
     exit();
   }
-  kill(atoi(argv[1]), atoi(argv[2]));
+  for(i=1; i<argc; i++)
+    kill(atoi(argv[i]));
   exit();
 }

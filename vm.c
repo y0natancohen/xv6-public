@@ -120,6 +120,7 @@ setupkvm(void)
 {
   pde_t *pgdir;
   struct kmap *k;
+
   if((pgdir = (pde_t*)kalloc()) == 0)
     return 0;
   memset(pgdir, 0, PGSIZE);

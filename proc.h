@@ -32,39 +32,26 @@ struct context {
   uint eip;
 };
 
-enum procstate { UNUSED, _UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
-//                  0       1      2         3         4          5    6
+enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
-  volatile enum procstate state;        // Process state
+  enum procstate state;        // Process state
   int pid;                     // Process ID
   struct proc *parent;         // Parent process
   struct trapframe *tf;        // Trap frame for current syscall
   struct context *context;     // swtch() here to run process
-  volatile void *chan;                  // If non-zero, sleeping on chan
-  volatile int killed;                  // If non-zero, have been killed
+  void *chan;                  // If non-zero, sleeping on chan
+  int killed;                  // If non-zero, have been killed
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-
-  volatile uint pending_signals;
-  volatile uint signal_mask;
-  struct sigaction signal_handlers[SIGNALS_SIZE];
-  struct trapframe *user_trapframe_backup;
-  volatile int user_mask_backup;
-  volatile int frozen;
-  volatile int got_user_signal;
-  volatile int sigcont_bit_is_up;
-  volatile int sigkill_bit_is_up;
+  //Swap file. must initiate with create swap file
+  struct file *swapFile;      //page file
 };
-
-
- 
-
 
 // Process memory is laid out contiguously, low addresses first:
 //   text

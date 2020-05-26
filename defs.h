@@ -9,7 +9,6 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
-struct sigaction;
 
 // bio.c
 void            binit(void);
@@ -53,6 +52,16 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
+int				createSwapFile(struct proc* p);
+int				readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size);
+int				writeToSwapFile(struct proc* p, char* buffer, uint placeOnFile, uint size);
+int				removeSwapFile(struct proc* p);
+
+
+// sysfile
+struct inode*	create(char *path, short type, short major, short minor);
+int				isdirempty(struct inode *dp);
+
 
 // ide.c
 void            ideinit(void);
@@ -108,7 +117,7 @@ int             cpuid(void);
 void            exit(void);
 int             fork(void);
 int             growproc(int);
-int             kill(int, int);
+int             kill(int);
 struct cpu*     mycpu(void);
 struct proc*    myproc();
 void            pinit(void);
@@ -121,19 +130,6 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-int             sigblocked(struct proc*, int);
-int             set_sigaction(int ,const struct sigaction*,struct sigaction*);
-int             sigret(void);
-void            sigret_syscall(void);
-void            sigret_syscall_finish(void);
-void            update_pending_signals(struct proc*, int);
-void            do_default_action(int, struct proc*);
-void            handle_user_signal(int);
-void            local_sleep(void*);
-
-//void            cas_acquire(volatile int *);
-//void            cas_release(volatile int *);
-
 
 // swtch.S
 void            swtch(struct context**, struct context*);

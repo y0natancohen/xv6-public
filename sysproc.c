@@ -29,12 +29,11 @@ sys_wait(void)
 int
 sys_kill(void)
 {
-  int pid, signum;
+  int pid;
 
-  if(argint(0, &pid) < 0 || argint(1, &signum) < 0)
+  if(argint(0, &pid) < 0)
     return -1;
-
-  return kill(pid,signum);
+  return kill(pid);
 }
 
 int
@@ -89,48 +88,4 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
-}
-
-int
-sys_sigprocmask(void)
-{
-    int sigprocmask;
-
-    if(argint(0, &sigprocmask) < 0)
-        return -1;
-    
-    uint old = myproc()->signal_mask;
-    myproc()->signal_mask=sigprocmask;
-
-    return old;
-}
-
-int
-sys_sigaction(void) 
-{
-    int signum;
-    struct sigaction *act;
-    struct sigaction *oldact;
-
-    if(argint(0, &signum) < 0 
-        || argptr(1,(void *)&act,sizeof(struct sigaction)) < 0 
-        || argptr(2,(void *)&oldact,sizeof(struct sigaction)) < 0){
-        
-        return -1;
-    }
-    
-    return set_sigaction(signum,act,oldact);
-}
-int
-sys_sigret(void)
-{
-// todo remove if?
-  if (myproc()->tf && myproc()->user_trapframe_backup){
-    sigret();
-  }
-
-  //cprintf("end sys_sigret\n");
-  
-  return 0;
-  
 }

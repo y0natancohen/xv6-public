@@ -100,12 +100,6 @@ exec(char *path, char **argv)
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   switchuvm(curproc);
-  
-  for (int i = 0; i < SIGNALS_SIZE; i++){
-    curproc->signal_handlers[i].sa_handler = SIG_DFL;
-    curproc->signal_handlers[i].sigmask = 0;
-  }
-  
   freevm(oldpgdir);
   return 0;
 
