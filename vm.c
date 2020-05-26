@@ -216,8 +216,68 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
   return 0;
 }
 
+int writePageToSwapFile(char* va){
+  int i=0;
+  int found=0;
+  for(; i< MAX_PSYC_PAGES; i++){
+    if(myproc()->swapped_pages[i].available){
+      found=1;
+      break;
+    }
+  }
+  myproc()->swapped_pages[i].va = va;
+  int num = 0;
+  if ((num = writeToSwapFile(myproc(), (char*)PTE_ADDR(va), i * PGSIZE, PGSIZE)) == 0)
+    return 0;
+
+  pte_t *pte1 = walkpgdir(myproc()->pgdir, (void*)va, 0);
+  if (!*pte1)
+    panic("writePageToSwapFile: pte1 is empty");
+  kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(myproc()->pgdir, va, 0))));
+  *pte1 = PTE_W | PTE_U | PTE_PG;
+  ++myproc()->totalPagedOutCount;
+  ++myproc()->pagesinswapfile;
+  lcr3(v2p(myproc()->pgdir));
+  if(!found) return -1;
+  return i;
+} 
+
+void swap_pages(uint page_fault_addr) {
+  //TODO delet   cprintf("resched swapPages!\n");
+  if (strcmp(myproc()->name, "init") == 0 || strcmp(myproc()->name, "sh") == 0) {
+    myproc()->pagesinmem++;
+    return;
+  }
+
+  // choose mem_page from mem_pages to write to swap
+  // dummy choosing:
+  struct mem_page mp = myproc()->mem_pages[0];
+  // write to swap
+  writePageToSwapFile(mp.va);
+  // update swap data structure
+  int i=0;
+  for(;i<MAX_PSYC_PAGES;i++){
+    /// todo:check if PTE_ADDR can be used on page_fault_vaddr since it comes from rcr2
+    if(myproc()->swapped_pages[i].va == PTE_ADDR(page_fault_addr)){
+      myproc()->swapped_pages[i].va = mp.va;
+      break;
+    }
+  } 
+  // re-use old address for page fault page to be loaded
+  pte_t* old_pte = walkpgdir(myproc()->pgdir,mp.va,0);
+  pte_t* new_pte = walkpgdir(myproc()->pgdir, page_fault_addr, 0);
+  *new_pte = PTE_ADDR(*old_pte) | PTE_P | PTE_W | PTE_U; // todo: this is magil
+  // load addr from swap file to mem pages and page tables
+  char* buf = PTE_ADDR(*new_pte);
+  readFromSwapFile(myproc(),buf, i * PGSIZE, PGSIZE);
+  
+  lcr3(v2p(myproc()->pgdir));
+  ++myproc()->totalPagedOutCount;
+}
+
 // Allocate page tables and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
+//todo: add/update proc->mem_pages
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
@@ -231,6 +291,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
+    if(myproc()->pagesinmem >= MAX_PSYC_PAGES) {
+      if ((writePageToSwapFile((char*)a)) ==-1)
+        panic("allocuvm: error writing page to swap file");
+    }
     mem = kalloc();
     if(mem == 0){
       cprintf("allocuvm out of memory\n");

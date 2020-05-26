@@ -77,7 +77,18 @@ trap(struct trapframe *tf)
             cpuid(), tf->cs, tf->eip);
     lapiceoi();
     break;
+  // handle page fault
+  case T_PGFLT:
+    uint v_addr = rcr2();
+    pde_t *pde = myproc()->pgdir[PDX(v_addr)];
+    // maybe cast to int
+    if (!((uint)(*pde) & PTE_P)) {
+       // not present at page directory -> page fault
+      swap_pages(v_addr);
 
+    }
+
+    break;
   //PAGEBREAK: 13
   default:
     if(myproc() == 0 || (tf->cs&3) == 0){

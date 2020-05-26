@@ -34,6 +34,25 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+
+struct swapped_page {
+  // uint swaploc;
+  // int age;
+  int available;
+  char *va;
+  int place_in_file;
+};
+
+// struct freepg {
+//   char *va;
+//   // int age;
+//   // struct freepg *next;
+//   // struct freepg *prev;
+// };
+struct mem_page{
+  uint va;
+};
+
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
@@ -51,6 +70,17 @@ struct proc {
   char name[16];               // Process name (debugging)
   //Swap file. must initiate with create swap file
   struct file *swapFile;      //page file
+
+
+  int pagesinmem;             // No. of pages in physical memory
+  int pagesinswapfile;        // No. of pages in swap file
+  int totalPageFaultCount;    // Total number of page faults for this process
+  int totalPagedOutCount;     // Total number of pages that were placed in the swap file
+  struct freepg freepages[MAX_PSYC_PAGES];  // Pre-allocated space for the pages in physical memory linked list
+  struct swapped_page swapped_pages[MAX_PSYC_PAGES];// Pre-allocated space for the pages in swap file array
+  struct freepg *head;        // Head of the pages in physical memory linked list
+  struct freepg *tail;        // End of the pages in physical memory linked list
+  struct mem_page mem_pages[MAX_PSYC_PAGES];
 };
 
 // Process memory is laid out contiguously, low addresses first:

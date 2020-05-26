@@ -112,6 +112,11 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  for(int i=0; i< MAX_PSYC_PAGES; i++){
+   p->swapped_pages[i].va = 0;
+   p->swapped_pages[i].available = 1;
+  }
+
   return p;
 }
 
