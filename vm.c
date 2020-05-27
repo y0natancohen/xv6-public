@@ -235,8 +235,8 @@ int writePageToSwapFile(char* va){
     panic("writePageToSwapFile: pte1 is empty");
   kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(myproc()->pgdir, va, 0))));
   *pte1 = PTE_W | PTE_U | PTE_PG;
-  ++myproc()->totalPagedOutCount;
-  ++myproc()->pagesinswapfile;
+//  ++myproc()->totalPagedOutCount;
+  myproc()->num_of_swap_pages += 1;
   lcr3(v2p(myproc()->pgdir));
   if(!found) return -1;
   return i;
@@ -245,7 +245,7 @@ int writePageToSwapFile(char* va){
 void swap_pages(uint page_fault_addr) {
   //TODO delet   cprintf("resched swapPages!\n");
   if (strcmp(myproc()->name, "init") == 0 || strcmp(myproc()->name, "sh") == 0) {
-    myproc()->pagesinmem++;
+    myproc()->num_of_mem_pages += 1;
     return;
   }
 
@@ -272,7 +272,7 @@ void swap_pages(uint page_fault_addr) {
   readFromSwapFile(myproc(),buf, i * PGSIZE, PGSIZE);
   
   lcr3(v2p(myproc()->pgdir));
-  ++myproc()->totalPagedOutCount;
+//  ++myproc()->totalPagedOutCount;
 }
 
 // Allocate page tables and physical memory to grow process from oldsz to
@@ -291,7 +291,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
-    if(myproc()->pagesinmem >= MAX_PSYC_PAGES) {
+    if(myproc()->num_of_mem_pages >= MAX_PSYC_PAGES) {
       if ((writePageToSwapFile((char*)a)) ==-1)
         panic("allocuvm: error writing page to swap file");
     }

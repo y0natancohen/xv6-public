@@ -56,6 +56,9 @@ int				createSwapFile(struct proc* p);
 int				readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size);
 int				writeToSwapFile(struct proc* p, char* buffer, uint placeOnFile, uint size);
 int				removeSwapFile(struct proc* p);
+int             copy_swap_file(struct proc* from_p, struct proc* to_p);
+void            copy_proc_page_data(struct proc* from_p, struct proc* to_p);
+void            init_proc_page_data(struct proc* p);
 
 
 // sysfile
