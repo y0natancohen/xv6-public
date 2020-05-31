@@ -196,6 +196,8 @@ void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
 }
 
 void init_proc_page_data(struct proc* p){
+    p->num_of_swap_pages = 0;
+    p->num_of_mem_pages = 0;
     for (int i = 0; i < MAX_PSYC_PAGES; i++) {
         p->swapped_pages[i].va = 0;
         p->swapped_pages[i].available = 1;
@@ -282,6 +284,10 @@ exit(void) {
     end_op();
     curproc->cwd = 0;
 
+    // paging
+    removeSwapFile(curproc);
+    // paging
+
     acquire(&ptable.lock);
 
     // Parent might be sleeping in wait().
@@ -329,6 +335,11 @@ wait(void) {
                 p->name[0] = 0;
                 p->killed = 0;
                 p->state = UNUSED;
+
+                // paging
+                init_proc_page_data(p);
+                // paging
+
                 release(&ptable.lock);
                 return pid;
             }

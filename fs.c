@@ -737,10 +737,22 @@ removeSwapFile(struct proc *p) {
 }
 
 int copy_swap_file(struct proc *from_p, struct proc *to_p) {
-    // todo if it fails do it like asaf in chuncks
+    // todo try with one chunk
     char buf[PGSIZE * MAX_SWAP_PAGES];
-    if (readFromSwapFile(from_p, &buf, 0, PGSIZE * MAX_SWAP_PAGES) < 0)
-        return -1;
+    int off = 0;
+    int exit_code;
+    while (1){
+        exit_code = readFromSwapFile(from_p, &buf, off, PGSIZE * MAX_SWAP_PAGES);
+//        exit_code = readFromSwapFile(from_p, &buf, 0, PGSIZE * MAX_SWAP_PAGES);
+        if (exit_code == 0){
+            break;
+        } else if (exit_code < 0){
+            panic("failed to readFromSwapFile in copy_swap_file");
+        } else{
+            off += exit_code;
+        }
+
+    }
 
     if (writeToSwapFile(to_p, &buf, 0, PGSIZE * MAX_SWAP_PAGES) < 0)
         return -1;

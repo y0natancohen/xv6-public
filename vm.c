@@ -291,7 +291,9 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
-    if(myproc()->num_of_mem_pages >= MAX_PSYC_PAGES) {
+    if(myproc()->num_of_mem_pages < MAX_PSYC_PAGES){
+
+    } else {
       if ((writePageToSwapFile((char*)a)) ==-1)
         panic("allocuvm: error writing page to swap file");
     }
