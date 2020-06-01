@@ -120,18 +120,25 @@ setupkvm(void)
 {
   pde_t *pgdir;
   struct kmap *k;
-
-  if((pgdir = (pde_t*)kalloc()) == 0)
+  // cprintf("setupkvm1\n");
+  if((pgdir = (pde_t*)kalloc()) == 0){
+    // cprintf("failed1");
     return 0;
+  }
+  // cprintf("setupkvm2\n");
   memset(pgdir, 0, PGSIZE);
+  // cprintf("setupkvm3\n");
+
   if (P2V(PHYSTOP) > (void*)DEVSPACE)
     panic("PHYSTOP too high");
   for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
     if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
                 (uint)k->phys_start, k->perm) < 0) {
       freevm(pgdir);
+      // cprintf("failed2");
       return 0;
     }
+  // cprintf("setupkvm4\n");
   return pgdir;
 }
 
@@ -216,71 +223,169 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
   return 0;
 }
 
-int writePageToSwapFile(char* va){
-  int i=0;
-  int found=0;
-  for(; i< MAX_PSYC_PAGES; i++){
-    if(myproc()->swapped_pages[i].available){
-      found=1;
+int is_system_proc(struct proc* p){
+  return (myproc()->pid <= 2);
+}
+
+void swap_pages(uint page_fault_addr, pde_t *pgdir){
+  if (is_system_proc(myproc())) return;
+  uint page_fault_addr_rounded = PGROUNDDOWN(page_fault_addr);
+
+  cprintf("page fault addr: %d, rounded: %d, pid: %d\n", page_fault_addr,page_fault_addr_rounded, myproc()->pid);
+  cprintf("%d mem pages\n",myproc()->num_of_mem_pages);
+  for(int i=0; i<MAX_PSYC_PAGES; i++){
+    cprintf("[%d,%d] ", myproc()->mem_pages[i].va, myproc()->mem_pages[i].available);
+  }
+  cprintf("\n");
+  cprintf("%d swap pages\n",myproc()->num_of_swap_pages);
+  for(int i=0; i<MAX_PSYC_PAGES; i++){
+    cprintf("[%d,%d] ", myproc()->swapped_pages[i].va, myproc()->swapped_pages[i].available);
+  }
+  cprintf("\n");
+
+  
+  // choose mem_page from mem_pages to write to swap
+  int ind_page_to_replace = pick_page_to_replace(0, page_fault_addr_rounded, pgdir);
+  // cprintf("swap_pages pick_page_to_replace: %d\n", ind_page_to_replace);
+  struct mem_page page_to_swap =  myproc()->mem_pages[ind_page_to_replace];
+  int swap_index = find_next_available_swappage();
+  if(swap_index==-1) panic("no room for swapping");
+  
+  // cprintf("picked available swap index: %d\n",swap_index);
+  myproc()->swapped_pages[swap_index].available = 0;
+  myproc()->swapped_pages[swap_index].va = page_to_swap.va;
+  // write to swap
+  // cprintf("addr to swap: %x, new page addr: %x\n", page_to_swap.va, page_fault_addr_rounded);
+  int n;
+  if ((n = writeToSwapFile(myproc(), (char*)PTE_ADDR(page_to_swap.va),swap_index * PGSIZE, PGSIZE)) <= 0)
+    panic("could not write to swap file!");
+  // cprintf("wrote %d bytes to swapFile\n",n);
+  // clean memory
+  pte_t *old_pte = walkpgdir(pgdir, (void*)page_to_swap.va, 0);
+  if (!*old_pte)
+    panic("swap_pages: old_pte is empty");
+  kfree(P2V(PTE_ADDR(*old_pte)));
+  *old_pte |= PTE_W | PTE_U | PTE_PG ;
+  *old_pte &= ~PTE_P;
+
+  // re-use old address for page fault page to be loaded  
+  pte_t* new_pte = walkpgdir(pgdir, (char*)page_fault_addr_rounded, 0);
+  *new_pte = PTE_ADDR(*old_pte) | PTE_W | PTE_U | PTE_P; 
+  *new_pte &= ~PTE_PG;
+  // load addr from swap file to ram
+  int index_to_read_from=0;
+  for(;index_to_read_from<MAX_PSYC_PAGES;index_to_read_from++){
+    if(myproc()->swapped_pages[index_to_read_from].va == page_fault_addr_rounded){
       break;
     }
   }
-  myproc()->swapped_pages[i].va = va;
-  int num = 0;
-  if ((num = writeToSwapFile(myproc(), (char*)PTE_ADDR(va), i * PGSIZE, PGSIZE)) == 0)
-    return 0;
+  char buf[PGSIZE];
+  // cprintf("reading from swap file to buf at index: %d\n",index_to_read_from);
+  // (char*)PTE_ADDR(*new_pte)
+  if((n=readFromSwapFile(myproc(), buf, index_to_read_from * PGSIZE, PGSIZE))<=0)
+    panic("could not read from swap file");
+  // cprintf("read %d bytes to buf. memmoving..\n",n);
+  memmove((char *)page_fault_addr_rounded, buf, PGSIZE); //copy page to physical memory 
+  // cprintf("memory moved!\n");
+  
+  myproc()->swapped_pages[index_to_read_from].available=1;
+  myproc()->swapped_pages[index_to_read_from].va=0;
 
-  pte_t *pte1 = walkpgdir(myproc()->pgdir, (void*)va, 0);
-  if (!*pte1)
-    panic("writePageToSwapFile: pte1 is empty");
-  kfree((char*)PTE_ADDR(P2V_WO(*walkpgdir(myproc()->pgdir, va, 0))));
-  *pte1 = PTE_W | PTE_U | PTE_PG;
-//  ++myproc()->totalPagedOutCount;
-  myproc()->num_of_swap_pages += 1;
-  lcr3(v2p(myproc()->pgdir));
-  if(!found) return -1;
-  return i;
-} 
+  // update mem pages struct
+  myproc()->mem_pages[ind_page_to_replace].va =  page_fault_addr_rounded;
+  myproc()->mem_pages[ind_page_to_replace].available =  0;
 
-void swap_pages(uint page_fault_addr) {
-  //TODO delet   cprintf("resched swapPages!\n");
-  if (strcmp(myproc()->name, "init") == 0 || strcmp(myproc()->name, "sh") == 0) {
-    myproc()->num_of_mem_pages += 1;
-    return;
+  // refresh TLB
+  // cprintf("refreshing TLB!\n");
+  lcr3(V2P(pgdir));
+}
+
+int pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir){
+    
+  if(policy == 0){
+    while (1){
+      int next = QueueGet(&myproc()->mem_page_q);
+      // cprintf("next is: %d\n", next);
+
+      pte_t *pte = walkpgdir(pgdir, (void*)myproc()->mem_pages[next].va, 0);
+      if (!*pte)
+        panic("swap_pages: old_pte is empty");
+      
+      if (*pte & PTE_A){ // second chance
+        QueuePut(next, &myproc()->mem_page_q);
+        *pte &= ~PTE_A;
+      }else {
+        return next;
+      }
+    }
+  }else{
+    for(int i=0; i<MAX_PSYC_PAGES; i++){
+      if(!myproc()->mem_pages[i].available){
+        // cprintf("picked mem page: %d to replace\n", i);
+        return i;
+      }
+    }
   }
+  return -1;
+}
+
+void move_page_to_swap(uint new_page, pde_t *pgdir) {
+  // cprintf("move_page_to_swap pid: %d\n", myproc()->pid);
+  if (is_system_proc(myproc())) return;
 
   // choose mem_page from mem_pages to write to swap
-  // dummy choosing:
-  struct mem_page mp = myproc()->mem_pages[0];
+  int ind_page_to_replace = pick_page_to_replace(0, new_page, pgdir);
+  // cprintf("move_page_to_swap pick_page_to_replace: %d\n", ind_page_to_replace);
+
+  struct mem_page page_to_swap =  myproc()->mem_pages[ind_page_to_replace];
+  int swap_index = find_next_available_swappage();
+  myproc()->swapped_pages[swap_index].available = 0;
+  myproc()->swapped_pages[swap_index].va = page_to_swap.va;
   // write to swap
-  writePageToSwapFile(mp.va);
-  // update swap data structure
-  int i=0;
-  for(;i<MAX_PSYC_PAGES;i++){
-    /// todo:check if PTE_ADDR can be used on page_fault_vaddr since it comes from rcr2
-    if(myproc()->swapped_pages[i].va == PTE_ADDR(page_fault_addr)){
-      myproc()->swapped_pages[i].va = mp.va;
-      break;
+  // cprintf("addr to swap: %x, new page addr: %x\n", page_to_swap.va, new_page);
+  int n;
+  if ((n = writeToSwapFile(myproc(), (char*)PTE_ADDR(page_to_swap.va),swap_index * PGSIZE, PGSIZE)) <= 0)
+    panic("could not write to swap file!");
+  // cprintf("ballac: %d\n",n);
+  pte_t *old_pte = walkpgdir(pgdir, (void*)page_to_swap.va, 0);
+  if (!*old_pte)
+    panic("swap_pages: old_pte is empty");
+  kfree(P2V(PTE_ADDR(*old_pte)));
+  *old_pte =  PTE_W | PTE_U | PTE_PG;
+
+  myproc()->mem_pages[ind_page_to_replace].va =  new_page;
+  myproc()->mem_pages[ind_page_to_replace].available =  0;
+
+  myproc()->num_of_swap_pages += 1;
+  // refresh TLB
+  // cprintf("refreshing TLB!\n");
+  lcr3(V2P(pgdir));
+}
+
+int find_next_available_swappage(){
+  for(int i=0; i<MAX_PSYC_PAGES; i++){
+    if(myproc()->swapped_pages[i].available){
+      return i;
     }
-  } 
-  // re-use old address for page fault page to be loaded
-  pte_t* old_pte = walkpgdir(myproc()->pgdir,mp.va,0);
-  pte_t* new_pte = walkpgdir(myproc()->pgdir, page_fault_addr, 0);
-  *new_pte = PTE_ADDR(*old_pte) | PTE_P | PTE_W | PTE_U; // todo: this is magil
-  // load addr from swap file to mem pages and page tables
-  char* buf = PTE_ADDR(*new_pte);
-  readFromSwapFile(myproc(),buf, i * PGSIZE, PGSIZE);
-  
-  lcr3(v2p(myproc()->pgdir));
-//  ++myproc()->totalPagedOutCount;
+  }
+  return -1;
+}
+
+int find_next_available_mempage(){
+  for(int i=0; i<MAX_PSYC_PAGES; i++){
+    if(myproc()->mem_pages[i].available){
+      return i;
+    }
+  }
+  return -1;
 }
 
 // Allocate page tables and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
-//todo: add/update proc->mem_pages
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
+  // cprintf("inside allocuvm!\n");
   char *mem;
   uint a;
 
@@ -291,11 +396,24 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
-    if(myproc()->num_of_mem_pages < MAX_PSYC_PAGES){
+    if(!is_system_proc(myproc())){
+      if (myproc()->num_of_mem_pages + myproc()->num_of_swap_pages > MAX_TOTAL_PAGES){
+        panic("max total pages cannot exceed 32");
+      }
+      if(myproc()->num_of_mem_pages < MAX_PSYC_PAGES){
+        // cprintf("alloc for pid: %d, num of mem pages: %d, a: %d, pgdir: %d\n"
+        //   ,myproc()->pid,myproc()->num_of_mem_pages,a, pgdir);
+        int free_i = find_next_available_mempage();
+        myproc()->mem_pages[free_i].va = a;
+        myproc()->mem_pages[free_i].available = 0;
+        myproc()->num_of_mem_pages +=1;
+        QueuePut(free_i, &myproc()->mem_page_q);
+        // cprintf("QueuePut: %d\n", free_i);
 
-    } else {
-      if ((writePageToSwapFile((char*)a)) ==-1)
-        panic("allocuvm: error writing page to swap file");
+      } else {
+        cprintf("swapping, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,myproc()->num_of_mem_pages);
+        move_page_to_swap(a, pgdir);
+      }
     }
     mem = kalloc();
     if(mem == 0){
@@ -311,6 +429,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       return 0;
     }
   }
+  // cprintf("end of allocuvm\n");
   return newsz;
 }
 
@@ -321,6 +440,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 {
+  // cprintf("dealloc for pid: %d\n",myproc()->pid);
   pte_t *pte;
   uint a, pa;
 
@@ -338,6 +458,8 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
         panic("kfree");
       char *v = P2V(pa);
       kfree(v);
+      myproc()->num_of_mem_pages -= 1;
+
       *pte = 0;
     }
   }
@@ -385,14 +507,25 @@ copyuvm(pde_t *pgdir, uint sz)
   pte_t *pte;
   uint pa, i, flags;
   char *mem;
-
+  // cprintf("copyuvm: 1\n");
   if((d = setupkvm()) == 0)
     return 0;
+  
   for(i = 0; i < sz; i += PGSIZE){
+    // cprintf("copyuvm: 2\n");
+    
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
+    if(!(*pte & PTE_P) && !(*pte & PTE_PG))
       panic("copyuvm: page not present");
+    if(*pte & PTE_PG){
+      cprintf("copyuvm: copy of swap\n");
+      pte = walkpgdir(d, (void*)i, 1);
+      *pte |= PTE_U | PTE_W | PTE_PG;
+      *pte &= ~PTE_P;
+      lcr3(V2P(myproc()->pgdir));
+      continue;
+    }
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -449,6 +582,15 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
     va = va0 + PGSIZE;
   }
   return 0;
+}
+
+void handle_page_fault(uint pgFaultAddr){
+  pte_t *pte = walkpgdir(myproc()->pgdir, (void*)pgFaultAddr, 0);
+  if (((uint)(*pte) & PTE_PG)) {
+    // bring from swap
+    cprintf("page fault: starting swap..!\n");
+    swap_pages(pgFaultAddr,myproc()->pgdir);
+  }
 }
 
 //PAGEBREAK!

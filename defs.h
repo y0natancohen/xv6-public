@@ -198,6 +198,20 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+void            move_page_to_swap(uint,pde_t*);
+void            handle_page_fault(uint);
+void            writePageToSwapFile(uint, int);
+int             find_next_available_mempage();
+int             is_system_proc(struct proc*);
+int             find_next_available_swappage();
+int pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+
+// queue
+
+void QueueInit(struct queue* q);
+int QueuePut(int new, struct queue* q);
+int QueueGet(struct queue *q);

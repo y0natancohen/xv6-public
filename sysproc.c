@@ -47,12 +47,15 @@ sys_sbrk(void)
 {
   int addr;
   int n;
+  // cprintf("inside sbrk\n");
 
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
   if(growproc(n) < 0)
     return -1;
+  // cprintf("finish sbrk\n");
+
   return addr;
 }
 

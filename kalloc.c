@@ -83,14 +83,21 @@ char*
 kalloc(void)
 {
   struct run *r;
-
-  if(kmem.use_lock)
+  // cprintf("1\n");
+  if(kmem.use_lock){
     acquire(&kmem.lock);
+    // cprintf("2\n");
+  }
   r = kmem.freelist;
-  if(r)
+  if(r){
+  //  cprintf("3\n");
     kmem.freelist = r->next;
-  if(kmem.use_lock)
+  }
+    
+  if(kmem.use_lock){
+  //  cprintf("4\n");
     release(&kmem.lock);
+  }
   return (char*)r;
 }
 

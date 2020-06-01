@@ -39,7 +39,7 @@ struct swapped_page {
   // uint swaploc;
   // int age;
   int available;
-  char *va;
+  uint va;
   int place_in_file;
 };
 
@@ -50,6 +50,7 @@ struct swapped_page {
 //   // struct freepg *prev;
 // };
 struct mem_page{
+  int available;
   uint va;
 };
 
@@ -74,13 +75,13 @@ struct proc {
 
   int num_of_mem_pages;             // No. of pages in physical memory
   int num_of_swap_pages;        // No. of pages in swap file
-//  int totalPageFaultCount;    // Total number of page faults for this process
-//  int totalPagedOutCount;     // Total number of pages that were placed in the swap file
 //  struct freepg freepages[MAX_PSYC_PAGES];  // Pre-allocated space for the pages in physical memory linked list
   struct swapped_page swapped_pages[MAX_PSYC_PAGES];// Pre-allocated space for the pages in swap file array
 //  struct freepg *head;        // Head of the pages in physical memory linked list
 //  struct freepg *tail;        // End of the pages in physical memory linked list
   struct mem_page mem_pages[MAX_PSYC_PAGES];
+
+  struct queue mem_page_q;
 };
 
 // Process memory is laid out contiguously, low addresses first:

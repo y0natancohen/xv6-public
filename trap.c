@@ -79,15 +79,9 @@ trap(struct trapframe *tf)
     break;
   // handle page fault
   case T_PGFLT:
-    uint v_addr = rcr2();
-    pde_t *pde = myproc()->pgdir[PDX(v_addr)];
-    // maybe cast to int
-    if (!((uint)(*pde) & PTE_P)) {
-       // not present at page directory -> page fault
-      swap_pages(v_addr);
-
-    }
-
+    // cprintf("page fault raised\n");
+    handle_page_fault(rcr2());
+    // cprintf("page fault handled\n");
     break;
   //PAGEBREAK: 13
   default:

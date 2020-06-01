@@ -46,23 +46,29 @@ free(void *ap)
 static Header*
 morecore(uint nu)
 {
+  // printf(1,"inside morecore\n");
   char *p;
   Header *hp;
 
   if(nu < 4096)
     nu = 4096;
   p = sbrk(nu * sizeof(Header));
-  if(p == (char*)-1)
+  if(p == (char*)-1){
+    printf(1, "finish morecore with 0\n");
     return 0;
+  }
   hp = (Header*)p;
   hp->s.size = nu;
+  // printf(1, "morecore before free\n");
   free((void*)(hp + 1));
+  // printf(1, "finish morecore\n");
   return freep;
 }
 
 void*
 malloc(uint nbytes)
 {
+  // printf(1, "inside malloc\n");
   Header *p, *prevp;
   uint nunits;
 

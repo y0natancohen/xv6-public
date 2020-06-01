@@ -112,7 +112,9 @@ allocproc(void) {
     p->context->eip = (uint) forkret;
 
     // paging
+    // cprintf("allocproc: init page data\n");
     init_proc_page_data(p);
+    // QueueInit(p->mem_page_q);
     //paging
 
     return p;
@@ -161,7 +163,7 @@ int
 growproc(int n) {
     uint sz;
     struct proc *curproc = myproc();
-
+    // cprintf("inside growproc\n");
     sz = curproc->sz;
     if (n > 0) {
         if ((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
@@ -170,16 +172,15 @@ growproc(int n) {
         if ((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
             return -1;
     }
+    // cprintf("growproc yalla bye \n");
     curproc->sz = sz;
     switchuvm(curproc);
+    // cprintf("growproc yalla bye 2\n");
     return 0;
 }
 
 int is_init_or_sh(struct proc* p){
-    return (
-            strcmp(proc->name, "init") == 0 ||
-            strcmp(proc->name, "sh") == 0
-            )
+    return p->pid<=2;
 }
 
 void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
@@ -187,6 +188,7 @@ void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
     to_p->num_of_swap_pages = from_p->num_of_swap_pages;
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
         to_p->mem_pages[i].va = from_p->mem_pages[i].va;
+        to_p->mem_pages[i].available = from_p->mem_pages[i].available;
     }
     for (int i = 0; i < MAX_SWAP_PAGES; ++i) {
         to_p->swapped_pages[i].va = from_p->swapped_pages[i].va;
@@ -196,11 +198,17 @@ void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
 }
 
 void init_proc_page_data(struct proc* p){
+    QueueInit(&p->mem_page_q);
+
     p->num_of_swap_pages = 0;
     p->num_of_mem_pages = 0;
     for (int i = 0; i < MAX_PSYC_PAGES; i++) {
         p->swapped_pages[i].va = 0;
         p->swapped_pages[i].available = 1;
+    }
+    for (int i = 0; i < MAX_PSYC_PAGES; i++) {
+        p->mem_pages[i].va = 0;
+        p->mem_pages[i].available = 1;
     }
 }
 
@@ -210,6 +218,7 @@ void init_proc_page_data(struct proc* p){
 // Caller must set state of returned proc to RUNNABLE.
 int
 fork(void) {
+    // cprintf("inside fork\n");
     int i, pid;
     struct proc *np;
     struct proc *curproc = myproc();
@@ -218,6 +227,7 @@ fork(void) {
     if ((np = allocproc()) == 0) {
         return -1;
     }
+    // cprintf("inside fork1\n");
 
     // Copy process state from proc.
     if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0) {
@@ -226,6 +236,8 @@ fork(void) {
         np->state = UNUSED;
         return -1;
     }
+    // cprintf("inside fork2\n");
+
     np->sz = curproc->sz;
     np->parent = curproc;
     *np->tf = *curproc->tf;
@@ -237,18 +249,23 @@ fork(void) {
         if (curproc->ofile[i])
             np->ofile[i] = filedup(curproc->ofile[i]);
     np->cwd = idup(curproc->cwd);
+    // cprintf("inside fork3\n");
 
     safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
     pid = np->pid;
 
     //paging
+    // cprintf("fork: paging..\n");
     copy_proc_page_data(curproc, np);
-
+    // cprintf("fork: copied page data to son\n");
     createSwapFile(np);
+    // cprintf("fork: created swapFile for son\n");
+    // cprintf("is sys proc? %d\n",is_init_or_sh(curproc));
     if (!is_init_or_sh(curproc)){  // if there is a swap file to copy from
+        // cprintf("fork: about to copy fathers swapFile content\n");
         if(copy_swap_file(curproc, np) < 0)
-            panic("failed to copy_swap_file in fork")
+            panic("failed to copy_swap_file in fork");
     }
     //paging
 
@@ -286,6 +303,7 @@ exit(void) {
 
     // paging
     removeSwapFile(curproc);
+    // free_process_mem(curproc);
     // paging
 
     acquire(&ptable.lock);
@@ -337,6 +355,7 @@ wait(void) {
                 p->state = UNUSED;
 
                 // paging
+                // cprintf("wait: init page data\n");
                 init_proc_page_data(p);
                 // paging
 
@@ -559,7 +578,8 @@ procdump(void) {
             state = states[p->state];
         else
             state = "???";
-        cprintf("%d %s %s", p->pid, state, p->name);
+        // paging data
+        cprintf("%d %s %s %d %d", p->pid, state, p->name, p->num_of_mem_pages, p->num_of_swap_pages);        
         if (p->state == SLEEPING) {
             getcallerpcs((uint *) p->context->ebp + 2, pc);
             for (i = 0; i < 10 && pc[i] != 0; i++)

@@ -41,6 +41,7 @@ exec(char *path, char **argv) {
     // paging
     struct proc backup_proc;
     copy_proc_page_data(curproc, &backup_proc);
+    // cprintf("exec: init page data\n");
     init_proc_page_data(curproc);
     //paging
 
