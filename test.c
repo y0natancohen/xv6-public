@@ -13,11 +13,9 @@ void fork_test(){
 }
 
 void test1(){
-  int pages = 19;
+  int pages = 18;
   // printf(1, "asking for %d pages\n",pages);
-  malloc(4096*pages);
   char* buf = malloc(4096*pages);
-
   for(int i=0; i<pages;i++){
     buf[i*4096] = 'a';
   }
@@ -25,6 +23,10 @@ void test1(){
   for(int i=0; i<pages;i++){
     printf(1, "data: %c\n",buf[i*4096]);
   }
+
+  printf(1, "calling free\n");
+  sleep(10);
+  free(buf);
 }
 int main(int argc, char *argv[]) {
   // fork_test();

@@ -7,7 +7,7 @@ typedef uint pde_t;
 #define MAX_SWAP_PAGES (MAX_TOTAL_PAGES - MAX_PSYC_PAGES)
 
 
-#define QUEUE_ELEMENTS 100
+#define QUEUE_ELEMENTS 16
 #define QUEUE_SIZE (QUEUE_ELEMENTS + 1)
 
 struct queue

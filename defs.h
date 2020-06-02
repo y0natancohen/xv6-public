@@ -202,7 +202,7 @@ void            move_page_to_swap(uint,pde_t*);
 void            handle_page_fault(uint);
 void            writePageToSwapFile(uint, int);
 int             find_next_available_mempage();
-int             is_system_proc(struct proc*);
+int             is_system_proc(struct proc* p);
 int             find_next_available_swappage();
 int pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir);
 
@@ -213,5 +213,7 @@ int pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir);
 // queue
 
 void QueueInit(struct queue* q);
-int QueuePut(int new, struct queue* q);
+int QueuePut(int x, struct queue* q);
 int QueueGet(struct queue *q);
+void QueueRemove(struct queue* q, int x);
+void QueuePrint(struct queue* q);
