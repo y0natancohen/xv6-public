@@ -8,6 +8,11 @@
 #include "proc.h"
 
 int
+sys_getNumberOfFreePages(void){
+  return getNumberOfFreePages();
+}
+
+int
 sys_fork(void)
 {
   return fork();
