@@ -79,9 +79,13 @@ void            ioapicinit(void);
 // kalloc.c
 char*           kalloc(void);
 void            kfree(char*);
+void            kfree_no_panic(char*);
 void            kinit1(void*, void*);
 void            kinit2(void*, void*);
 int             getNumberOfFreePages(void);
+void update_num_of_refs(char *v, int update_value);
+int get_num_of_refs(char *v);
+
 
 // kbd.c
 void            kbdintr(void);
@@ -195,6 +199,7 @@ void            freevm(pde_t*);
 void            inituvm(pde_t*, char*, uint);
 int             loaduvm(pde_t*, char*, struct inode*, uint, uint);
 pde_t*          copyuvm(pde_t*, uint);
+pde_t*          copyuvm_cow(pde_t*, uint);
 void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);

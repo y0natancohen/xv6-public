@@ -738,13 +738,13 @@ removeSwapFile(struct proc *p) {
 
 int copy_swap_file(struct proc *from_p, struct proc *to_p) {
     // todo try with one chunk
-    cprintf("inside copy_swap_file\n");
+//    cprintf("inside copy_swap_file\n");
     char buf[PGSIZE/2];
     int off = 0;
     int exit_code;
     while (1){
         exit_code = readFromSwapFile(from_p, (char *)&buf, off, PGSIZE/2);
-        cprintf("read %d bytes from parent: %d swapFile\n",exit_code, from_p->pid);
+//        cprintf("read %d bytes from parent: %d swapFile\n",exit_code, from_p->pid);
         if (exit_code == 0){
             break;
         } else if (exit_code < 0){
@@ -759,7 +759,7 @@ int copy_swap_file(struct proc *from_p, struct proc *to_p) {
         // return -1;
         panic("could not write to child swapFile");        
     } 
-    cprintf("wrote %d bytes to child: %d swapFile\n",n,to_p->pid);
+//    cprintf("wrote %d bytes to child: %d swapFile\n",n,to_p->pid);
         
 
     return 0;

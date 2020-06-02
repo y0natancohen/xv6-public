@@ -17,12 +17,14 @@ extern char end[]; // first address after kernel loaded from ELF file
 
 struct run {
   struct run *next;
+  int ref_count;
 };
 
 struct {
   struct spinlock lock;
   int use_lock;
   struct run *freelist;
+  struct run run_arr[MAX_PAGES];
 } kmem;
 
 // Initialization happens in two phases.
@@ -51,7 +53,7 @@ freerange(void *vstart, void *vend)
   char *p;
   p = (char*)PGROUNDUP((uint)vstart);
   for(; p + PGSIZE <= (char*)vend; p += PGSIZE)
-    kfree(p);
+    kfree_no_panic(p);
 }
 //PAGEBREAK: 21
 // Free the page of physical memory pointed at by v,
@@ -71,14 +73,47 @@ kfree(char *v)
 
   if(kmem.use_lock)
     acquire(&kmem.lock);
-  r = (struct run*)v;
+//  r = (struct run*)v;
+    r = &kmem.run_arr[(V2P(v) / PGSIZE)];
+
+    if (r->ref_count>1){
+        cprintf("kfree with r->ref_count=%d\n", r->ref_count);
+        panic("kfree with r->ref_count > 1");
+    }
   r->next = kmem.freelist;
   kmem.freelist = r;
+  r->ref_count = 0;
 
   num_of_free_pages++;
 
   if(kmem.use_lock)
     release(&kmem.lock);
+}
+void
+kfree_no_panic(char *v)
+{
+    struct run *r;
+
+    if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+        panic("kfree");
+
+    // Fill with junk to catch dangling refs.
+    memset(v, 1, PGSIZE);
+
+    if(kmem.use_lock)
+        acquire(&kmem.lock);
+//  r = (struct run*)v;
+    r = &kmem.run_arr[(V2P(v) / PGSIZE)];
+//    if (r->ref_count>1) panic("kfree with r > 1, maybe we did needed that change....");
+
+    r->next = kmem.freelist;
+    kmem.freelist = r;
+    r->ref_count = 0;
+
+    num_of_free_pages++;
+
+    if(kmem.use_lock)
+        release(&kmem.lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -88,26 +123,42 @@ char*
 kalloc(void)
 {
   struct run *r;
-  // cprintf("1\n");
   if(kmem.use_lock){
     acquire(&kmem.lock);
-    // cprintf("2\n");
   }
   r = kmem.freelist;
   if(r){
-  //  cprintf("3\n");
     kmem.freelist = r->next;
+    r->ref_count = 1;
     num_of_free_pages--;
   }
     
   if(kmem.use_lock){
-  //  cprintf("4\n");
     release(&kmem.lock);
   }
+  if (r) return P2V((r - kmem.run_arr) * PGSIZE);
   return (char*)r;
 }
 
 int getNumberOfFreePages(){
   return num_of_free_pages;
+}
+
+
+void update_num_of_refs(char *v, int update_value){
+    struct run *r;
+    if (kmem.use_lock)
+        acquire(&kmem.lock);
+
+    r = &kmem.run_arr[V2P(v)/PGSIZE];
+    r->ref_count += update_value;
+
+    if (kmem.use_lock)
+        release(&kmem.lock);
+}
+
+int get_num_of_refs(char *v){
+    struct run *r = &kmem.run_arr[V2P(v)/PGSIZE];
+    return r->ref_count;
 }
 

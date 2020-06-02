@@ -1,3 +1,6 @@
+//#include "mmu.h"
+//#include "memlayout.h"
+
 typedef unsigned int   uint;
 typedef unsigned short ushort;
 typedef unsigned char  uchar;
@@ -9,6 +12,8 @@ typedef uint pde_t;
 
 #define QUEUE_ELEMENTS 16
 #define QUEUE_SIZE (QUEUE_ELEMENTS + 1)
+
+#define MAX_PAGES (PHYSTOP / PGSIZE)
 
 struct queue
 {

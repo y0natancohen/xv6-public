@@ -218,7 +218,6 @@ void init_proc_page_data(struct proc* p){
 // Caller must set state of returned proc to RUNNABLE.
 int
 fork(void) {
-    // cprintf("inside fork\n");
     int i, pid;
     struct proc *np;
     struct proc *curproc = myproc();
@@ -227,16 +226,20 @@ fork(void) {
     if ((np = allocproc()) == 0) {
         return -1;
     }
-    // cprintf("inside fork1\n");
 
     // Copy process state from proc.
-    if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0) {
+//    if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0) {
+    if (is_system_proc(curproc)){
+        np->pgdir = copyuvm(curproc->pgdir, curproc->sz);
+    } else {
+        np->pgdir = copyuvm_cow(curproc->pgdir, curproc->sz);
+    }
+    if (np->pgdir == 0) {
         kfree(np->kstack);
         np->kstack = 0;
         np->state = UNUSED;
         return -1;
     }
-    // cprintf("inside fork2\n");
 
     np->sz = curproc->sz;
     np->parent = curproc;
@@ -249,21 +252,15 @@ fork(void) {
         if (curproc->ofile[i])
             np->ofile[i] = filedup(curproc->ofile[i]);
     np->cwd = idup(curproc->cwd);
-    // cprintf("inside fork3\n");
 
     safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
     pid = np->pid;
 
     //paging
-    // cprintf("fork: paging..\n");
-    copy_proc_page_data(curproc, np);
-    // cprintf("fork: copied page data to son\n");
-    createSwapFile(np);
-    // cprintf("fork: created swapFile for son\n");
-    // cprintf("is sys proc? %d\n",is_init_or_sh(curproc));
     if (!is_init_or_sh(curproc)){  // if there is a swap file to copy from
-        // cprintf("fork: about to copy fathers swapFile content\n");
+        copy_proc_page_data(curproc, np);
+        createSwapFile(np);
         if(copy_swap_file(curproc, np) < 0)
             panic("failed to copy_swap_file in fork");
     }
