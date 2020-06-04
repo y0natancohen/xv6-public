@@ -179,10 +179,6 @@ growproc(int n) {
     return 0;
 }
 
-int is_init_or_sh(struct proc* p){
-    return p->pid<=2;
-}
-
 void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
     to_p->num_of_mem_pages = from_p->num_of_mem_pages;
     to_p->num_of_swap_pages = from_p->num_of_swap_pages;
@@ -195,6 +191,7 @@ void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
         to_p->swapped_pages[i].available = from_p->swapped_pages[i].available;
         to_p->swapped_pages[i].place_in_file = from_p->swapped_pages[i].place_in_file;
     }
+    QueueCopy(&from_p->mem_page_q, &to_p->mem_page_q);
 }
 
 void init_proc_page_data(struct proc* p){
@@ -258,7 +255,7 @@ fork(void) {
     pid = np->pid;
 
     //paging
-    if (!is_init_or_sh(curproc)){  // if there is a swap file to copy from
+    if (!is_system_proc(curproc)){  // if there is a swap file to copy from
         copy_proc_page_data(curproc, np);
         createSwapFile(np);
         if(copy_swap_file(curproc, np) < 0)
@@ -300,7 +297,6 @@ exit(void) {
 
     // paging
     removeSwapFile(curproc);
-    // free_process_mem(curproc);
     // paging
 
     acquire(&ptable.lock);
@@ -342,7 +338,9 @@ wait(void) {
             if (p->state == ZOMBIE) {
                 // Found one.
                 pid = p->pid;
-                kfree(p->kstack);
+                cprintf("proc.c kfree kstack\n");
+                if(get_num_of_refs(p->kstack)>1) update_num_of_refs(p->kstack,-1);
+                else kfree(p->kstack);
                 p->kstack = 0;
                 freevm(p->pgdir);
                 p->pid = 0;

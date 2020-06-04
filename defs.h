@@ -210,14 +210,15 @@ void            writePageToSwapFile(uint, int);
 int             find_next_available_mempage();
 int             is_system_proc(struct proc* p);
 int             find_next_available_swappage();
-int pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir);
+int             pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir);
+void            print_process_mem_data(uint);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
 
 // queue
-
+void QueueCopy(struct queue* , struct queue* );
 void QueueInit(struct queue* q);
 int QueuePut(int x, struct queue* q);
 int QueueGet(struct queue *q);

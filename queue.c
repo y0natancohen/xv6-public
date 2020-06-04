@@ -51,6 +51,14 @@ void QueuePrint(struct queue* q)
 
 }
 
+void QueueCopy(struct queue* from_q, struct queue* to_q){
+    to_q->QueueIn = from_q->QueueIn;
+    to_q->QueueOut = from_q->QueueOut;
+    for(int i=0; i<QUEUE_SIZE; i++){
+        to_q->Queue[i] = from_q->Queue[i];
+    }
+}
+
 void QueueRemove(struct queue* q, int x)
 {
     int pages[MAX_PSYC_PAGES];

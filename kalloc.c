@@ -76,9 +76,9 @@ kfree(char *v)
 //  r = (struct run*)v;
     r = &kmem.run_arr[(V2P(v) / PGSIZE)];
 
-    if (r->ref_count>1){
+    if (r->ref_count!=1){
         cprintf("kfree with r->ref_count=%d\n", r->ref_count);
-        panic("kfree with r->ref_count > 1");
+        panic("kfree with r->ref_count != 1");
     }
   r->next = kmem.freelist;
   kmem.freelist = r;
@@ -89,6 +89,7 @@ kfree(char *v)
   if(kmem.use_lock)
     release(&kmem.lock);
 }
+
 void
 kfree_no_panic(char *v)
 {
@@ -136,7 +137,7 @@ kalloc(void)
   if(kmem.use_lock){
     release(&kmem.lock);
   }
-  if (r) return P2V((r - kmem.run_arr) * PGSIZE);
+  if (r) return (char*)P2V((r - kmem.run_arr) * PGSIZE);
   return (char*)r;
 }
 
@@ -158,7 +159,13 @@ void update_num_of_refs(char *v, int update_value){
 }
 
 int get_num_of_refs(char *v){
-    struct run *r = &kmem.run_arr[V2P(v)/PGSIZE];
-    return r->ref_count;
+  // if (kmem.use_lock)
+  //     acquire(&kmem.lock);
+  
+  struct run *r = &kmem.run_arr[V2P(v)/PGSIZE];
+  
+  // if (kmem.use_lock)
+  //       release(&kmem.lock);
+  return r->ref_count;
 }
 

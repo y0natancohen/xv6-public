@@ -2,8 +2,8 @@
 #include "stat.h"
 #include "user.h"
 
-void fork_test() {
-    int pages = 16;
+void fork_cow_no_swap() {
+    int pages = 10;
     // printf(1, "asking for %d pages\n",pages);
     char *buf = malloc(4096 * pages);
     for (int i = 0; i < pages; i++) {
@@ -30,8 +30,18 @@ void fork_test() {
     }
 }
 
-void test1() {
-    int pages = 18;
+void simple_fork(){
+    if (fork() == 0) {
+        printf(1, "child \n");
+    } else {
+        printf(1, "father \n");
+        wait();
+    }
+    
+}
+
+void swap_no_fork() {
+    int pages = 25;
     // printf(1, "asking for %d pages\n",pages);
     char *buf = malloc(4096 * pages);
     for (int i = 0; i < pages; i++) {
@@ -48,7 +58,8 @@ void test1() {
 }
 
 int main(int argc, char *argv[]) {
-    fork_test();
-//  test1();
+    fork_cow_no_swap();
+    // swap_no_fork();
+    // simple_fork();
     exit();
 }
