@@ -233,6 +233,7 @@ void handle_cow_fault(uint cow_fault_addr, pde_t *pgdir) {
             int free_i = find_next_available_mempage();
             myproc()->mem_pages[free_i].va = cow_fault_addr_rounded;
             myproc()->mem_pages[free_i].available = 0;
+            myproc()->mem_pages[free_i].nfu_counter = 0;
             myproc()->num_of_mem_pages += 1;
             QueuePut(free_i, &myproc()->mem_page_q);
         } else{
@@ -287,7 +288,7 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     }
 
     // choose mem_page from mem_pages to write to swap
-    int ind_page_to_replace = pick_page_to_replace(0, pgdir);
+    int ind_page_to_replace = pick_page_to_replace(pgdir);
     struct mem_page page_to_swap = myproc()->mem_pages[ind_page_to_replace];
     int swap_index = find_next_available_swappage();
     if (swap_index == -1) panic("no room for swapping");
@@ -345,38 +346,52 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     // update mem pages struct
     myproc()->mem_pages[ind_page_to_replace].va = page_fault_addr_rounded;
     myproc()->mem_pages[ind_page_to_replace].available = 0;
+    myproc()->mem_pages[ind_page_to_replace].nfu_counter = 0;
     QueuePut(ind_page_to_replace, &myproc()->mem_page_q);
 
     // refresh TLB
     lcr3(V2P(pgdir));
 }
 
-int pick_page_to_replace(int policy, pde_t *pgdir) {
+int pick_page_to_replace(pde_t *pgdir) {
+#ifdef SCFIFO
+    while (1) {
+        int next = QueueGet(&myproc()->mem_page_q);
+        // cprintf("next is: %d\n", next);
 
-    if (policy == 0) {
-        while (1) {
-            int next = QueueGet(&myproc()->mem_page_q);
-            // cprintf("next is: %d\n", next);
+        pte_t *pte = walkpgdir(pgdir, (void *) myproc()->mem_pages[next].va, 0);
+        if (!*pte)
+            panic("swap_pages: old_pte is empty");
 
-            pte_t *pte = walkpgdir(pgdir, (void *) myproc()->mem_pages[next].va, 0);
-            if (!*pte)
-                panic("swap_pages: old_pte is empty");
-
-            if (*pte & PTE_A) { // second chance
-                QueuePut(next, &myproc()->mem_page_q);
-                *pte &= ~PTE_A;
-            } else {
-                return next;
-            }
+        if (*pte & PTE_A) { // second chance
+            QueuePut(next, &myproc()->mem_page_q);
+            *pte &= ~PTE_A;
+        } else {
+            return next;
         }
-    } else {
-        for (int i = 0; i < MAX_PSYC_PAGES; i++) {
-            if (!myproc()->mem_pages[i].available) {
-                // cprintf("picked mem page: %d to replace\n", i);
-                return i;
+    }
+#endif
+#ifdef NFUA
+    uint lowest = 0; // not really lowest
+    int lowest_index = -1;
+    // set lowest
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+        if (!myproc()->mem_pages[i].available){
+            lowest = myproc()->mem_pages[i].nfu_counter;
+            break;
+        }
+    }
+    //find real lowest
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+        if (!myproc()->mem_pages[i].available){
+            if (myproc()->mem_pages[i].nfu_counter < lowest){
+                lowest = myproc()->mem_pages[i].nfu_counter;
+                lowest_index = i;
             }
         }
     }
+    return lowest_index;
+#endif
     return -1;
 }
 
@@ -385,7 +400,7 @@ void move_page_to_swap(uint new_page, pde_t *pgdir) {
     if (is_system_proc()) return;
 
     // choose mem_page from mem_pages to write to swap
-    int ind_page_to_replace = pick_page_to_replace(0, pgdir); // also takes out from q
+    int ind_page_to_replace = pick_page_to_replace(pgdir); // also takes out from q
     // cprintf("move_page_to_swap pick_page_to_replace: %d\n", ind_page_to_replace);
 
     struct mem_page page_to_swap = myproc()->mem_pages[ind_page_to_replace];
@@ -418,6 +433,7 @@ void move_page_to_swap(uint new_page, pde_t *pgdir) {
 
     myproc()->mem_pages[ind_page_to_replace].va = new_page;
     myproc()->mem_pages[ind_page_to_replace].available = 0;
+    myproc()->mem_pages[ind_page_to_replace].nfu_counter = 0;
 
     QueuePut(ind_page_to_replace, &myproc()->mem_page_q);
 
@@ -470,6 +486,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
                 int free_i = find_next_available_mempage();
                 myproc()->mem_pages[free_i].va = a;
                 myproc()->mem_pages[free_i].available = 0;
+                myproc()->mem_pages[free_i].nfu_counter = 0;
                 myproc()->num_of_mem_pages += 1;
 
                 QueuePut(free_i, &myproc()->mem_page_q);
@@ -622,15 +639,16 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 }
 
 void clear_mem_page_entry(uint va){
-            for (int i = 0; i < MAX_PSYC_PAGES; i++) {
-                if (myproc()->mem_pages[i].va == va && !myproc()->mem_pages[i].available) {
-                    myproc()->mem_pages[i].va = 0;
-                    myproc()->mem_pages[i].available = 1;
-                    myproc()->num_of_mem_pages -= 1;
-                    QueueRemove(&myproc()->mem_page_q, i);
-                    break;
-                }
-            }
+    for (int i = 0; i < MAX_PSYC_PAGES; i++) {
+        if (myproc()->mem_pages[i].va == va && !myproc()->mem_pages[i].available) {
+            myproc()->mem_pages[i].va = 0;
+            myproc()->mem_pages[i].available = 1;
+            myproc()->mem_pages[i].nfu_counter = 0;
+            myproc()->num_of_mem_pages -= 1;
+            QueueRemove(&myproc()->mem_page_q, i);
+            break;
+        }
+    }
 }
 
 // Free a page table and all the physical memory pages
@@ -807,13 +825,16 @@ void handle_page_fault(uint pgFaultAddr) {
 }
 
 void update_paging_data(){
+#ifdef NFUA
     struct proc* p = myproc();
     pte_t *pte;
-#ifdef NFUA
     for (int i = 0; i < MAX_PSYC_PAGES; i++){
-        pte = walkpgdir(p->pgdir, p->mem_pages[i].va, 0);
-        if (*pte &PTE_A){
-
+        if (p->mem_pages[i].available == 0){
+            p->mem_pages[i].nfu_counter >>= 1;
+            pte = walkpgdir(p->pgdir, (void*)p->mem_pages[i].va, 0);
+            if (*pte &PTE_A){
+                p->mem_pages[i].nfu_counter |= LEFT_MOST_BIT;
+            }
         }
     }
 #endif

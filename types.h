@@ -20,6 +20,8 @@ typedef uint pde_t;
 
 #define MAX_PAGES (PHYSTOP / PGSIZE)
 
+#define LEFT_MOST_BIT (1 << 31)
+
 struct queue
 {
     int Queue[QUEUE_SIZE];

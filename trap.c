@@ -110,7 +110,7 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->state == RUNNING &&
      tf->trapno == T_IRQ0+IRQ_TIMER){
       // paging
-//      update_paging_data();
+      update_paging_data();
       // paging
       yield();
   }

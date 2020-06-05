@@ -52,6 +52,7 @@ struct swapped_page {
 struct mem_page{
   int available;
   uint va;
+  uint nfu_counter;
 };
 
 // Per-process state
