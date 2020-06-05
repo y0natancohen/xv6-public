@@ -116,14 +116,10 @@ pde_t *
 setupkvm(void) {
     pde_t *pgdir;
     struct kmap *k;
-    // cprintf("setupkvm1\n");
     if ((pgdir = (pde_t *) kalloc()) == 0) {
-        // cprintf("failed1");
         return 0;
     }
-    // cprintf("setupkvm2\n");
     memset(pgdir, 0, PGSIZE);
-    // cprintf("setupkvm3\n");
 
     if (P2V(PHYSTOP) > (void *) DEVSPACE)
         panic("PHYSTOP too high");
@@ -132,10 +128,8 @@ setupkvm(void) {
     if (mappages(pgdir, k->virt, k->phys_end - k->phys_start,
                  (uint) k->phys_start, k->perm) < 0) {
         freevm(pgdir);
-        // cprintf("failed2");
         return 0;
     }
-    // cprintf("setupkvm4\n");
     return pgdir;
 }
 
@@ -215,15 +209,15 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz) {
     return 0;
 }
 
-int is_system_proc(struct proc *p) {
+int is_system_proc() {
     return (myproc()->pid <= 2);
 }
 
 
-void handle_copy_cow(uint page_fault_addr, pde_t *pgdir) {
-    if (is_system_proc(myproc())) return;
-    uint page_fault_addr_rounded = PGROUNDDOWN(page_fault_addr);
-    pte_t *pte = walkpgdir(pgdir, (void *) page_fault_addr_rounded, 0);
+void handle_cow_fault(uint cow_fault_addr, pde_t *pgdir) {
+    if (is_system_proc()) return;
+    uint cow_fault_addr_rounded = PGROUNDDOWN(cow_fault_addr);
+    pte_t *pte = walkpgdir(pgdir, (void *) cow_fault_addr_rounded, 0);
     char* v_addr = P2V(PTE_ADDR(*pte));
 
     int ref_count = get_num_of_refs((void *) v_addr);
@@ -235,23 +229,36 @@ void handle_copy_cow(uint page_fault_addr, pde_t *pgdir) {
     } else {
         cprintf("pid: %d, creating my copy for page: %d\n",myproc()->pid, v_addr);
         // todo: kill a process if he is asking cow but there is no more memory
+        if(myproc()->num_of_mem_pages<MAX_PSYC_PAGES){
+            int free_i = find_next_available_mempage();
+            myproc()->mem_pages[free_i].va = cow_fault_addr_rounded;
+            myproc()->mem_pages[free_i].available = 0;
+            myproc()->num_of_mem_pages += 1;
+            QueuePut(free_i, &myproc()->mem_page_q);
+        } else{
+            cprintf("move_page_to_swap, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,
+                        myproc()->num_of_mem_pages);
+                move_page_to_swap(cow_fault_addr_rounded, pgdir);
+        }
+        // copy on write
         char *new_page = kalloc();
         memmove(new_page, v_addr, PGSIZE);
-        uint flags = PTE_FLAGS(*pte);
-        *pte = V2P(new_page);
-        *pte |= flags;
-        *pte |= PTE_W;
-        *pte |= PTE_P;
+        // uint old_flags = PTE_FLAGS(*pte);
+        uint new_pa = V2P(new_page);
+        *pte = new_pa | PTE_W | PTE_P|PTE_U;
+        // uint new_flags = V2P(new_page) | PTE_FLAGS(*pte) | PTE_W | PTE_P;
         *pte &= ~PTE_COW;
-        // todo: add to mempages
-        cprintf("pid: %d, for va: %d, curr ref_count to: %d\n",
-         myproc()->pid,v_addr,get_num_of_refs(v_addr));
+        *pte &= ~PTE_PG;
+        // *pte |= new_flags; 
+
+        
         update_num_of_refs(v_addr, -1);
-        cprintf("pid: %d, for va: %d, updated ref_count to: %d\n",
+        cprintf("pid: %d, for va: %d, dec ref_count to: %d\n",
          myproc()->pid,v_addr,get_num_of_refs(v_addr));
+        // cprintf("pid: %d, for va: %d, updated ref_count to: %d\n",
+        //  myproc()->pid,v_addr,get_num_of_refs(v_addr));
 
     }
-
     lcr3(V2P(pgdir));
 }
 
@@ -271,7 +278,7 @@ void print_process_mem_data(uint pg_fault_adrr){
 }
 
 void swap_pages(uint page_fault_addr, pde_t *pgdir) {
-    if (is_system_proc(myproc())) return;
+    if (is_system_proc()) return;
     uint page_fault_addr_rounded = PGROUNDDOWN(page_fault_addr);
 
     int debug = 0;
@@ -280,7 +287,7 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     }
 
     // choose mem_page from mem_pages to write to swap
-    int ind_page_to_replace = pick_page_to_replace(0, page_fault_addr_rounded, pgdir);
+    int ind_page_to_replace = pick_page_to_replace(0, pgdir);
     struct mem_page page_to_swap = myproc()->mem_pages[ind_page_to_replace];
     int swap_index = find_next_available_swappage();
     if (swap_index == -1) panic("no room for swapping");
@@ -299,12 +306,15 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     
     char* old_v_addr = P2V(PTE_ADDR(*old_pte));
     int refsToSwappedFile = get_num_of_refs(old_v_addr);
-    cprintf("swap_pages: page with %d refs was swapped!\n",refsToSwappedFile);
+    cprintf("swap_pages: page: %d with %d refs was swapped!\n",old_v_addr,refsToSwappedFile);
     if(refsToSwappedFile == 1) {
-        cprintf("swap_pages.. kfree!");
+        cprintf("swap_pages.. kfree!\n");
+        *old_pte &= ~PTE_P;
         kfree(old_v_addr);
-    }
-    else update_num_of_refs(old_v_addr, -1);
+    } else {
+        cprintf("swap_pages: pid: %d, dec count for swapped page %d\n",myproc()->pid, old_v_addr);
+        update_num_of_refs(old_v_addr, -1);  
+    } 
     *old_pte |= PTE_U | PTE_PG;
     // | PTE_W
     // *old_pte &= ~PTE_P;
@@ -313,6 +323,10 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     pte_t *new_pte = walkpgdir(pgdir, (char *) page_fault_addr_rounded, 0);
     *new_pte = PTE_ADDR(*old_pte) | PTE_W | PTE_U | PTE_P;
     *new_pte &= ~PTE_PG;
+
+    // set ref count=1 to the file just came from swap
+    cprintf("reseting ref_count for page came from swap!\n");
+    update_num_of_refs(P2V(PTE_ADDR(*new_pte)), 1);
 
     // load addr from swap file to ram
     int index_to_read_from = 0;
@@ -337,7 +351,7 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     lcr3(V2P(pgdir));
 }
 
-int pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir) {
+int pick_page_to_replace(int policy, pde_t *pgdir) {
 
     if (policy == 0) {
         while (1) {
@@ -368,10 +382,10 @@ int pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir) {
 
 void move_page_to_swap(uint new_page, pde_t *pgdir) {
     // cprintf("move_page_to_swap pid: %d\n", myproc()->pid);
-    if (is_system_proc(myproc())) return;
+    if (is_system_proc()) return;
 
     // choose mem_page from mem_pages to write to swap
-    int ind_page_to_replace = pick_page_to_replace(0, new_page, pgdir); // also takes out from q
+    int ind_page_to_replace = pick_page_to_replace(0, pgdir); // also takes out from q
     // cprintf("move_page_to_swap pick_page_to_replace: %d\n", ind_page_to_replace);
 
     struct mem_page page_to_swap = myproc()->mem_pages[ind_page_to_replace];
@@ -379,7 +393,6 @@ void move_page_to_swap(uint new_page, pde_t *pgdir) {
     myproc()->swapped_pages[swap_index].available = 0;
     myproc()->swapped_pages[swap_index].va = page_to_swap.va;
     // write to swap
-    // cprintf("addr to swap: %x, new page addr: %x\n", page_to_swap.va, new_page);
     int n;
     if ((n = writeToSwapFile(myproc(), (char *) PTE_ADDR(page_to_swap.va), swap_index * PGSIZE, PGSIZE)) <= 0)
         panic("could not write to swap file!");
@@ -395,8 +408,10 @@ void move_page_to_swap(uint new_page, pde_t *pgdir) {
         *old_pte &= ~PTE_P;
         kfree(old_v_addr);
     }
-    else update_num_of_refs(old_v_addr, -1);
-    
+    else {
+        cprintf("move_page_to_swap: pid: %d, dec count for swapped page %d\n",myproc()->pid,old_v_addr);
+        update_num_of_refs(old_v_addr, -1);
+    }
     *old_pte |=  PTE_U | PTE_PG;
     // | PTE_W - todo: cow+fork decide which flags needed
     // *old_pte &= ~PTE_P;
@@ -444,7 +459,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 
     a = PGROUNDUP(oldsz);
     for (; a < newsz; a += PGSIZE) {
-        if (!is_system_proc(myproc())) {
+        if (!is_system_proc()) {
             if (myproc()->num_of_mem_pages + myproc()->num_of_swap_pages > MAX_TOTAL_PAGES) {
                 panic("max total pages cannot exceed 32");
             }
@@ -464,22 +479,37 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
                         myproc()->num_of_mem_pages);
                 move_page_to_swap(a, pgdir);
             }
+            mem = kalloc();
+            if (mem == 0) {
+                cprintf("allocuvm out of memory\n");
+                deallocuvm(pgdir, newsz, oldsz);
+                return 0;
+            }
+            memset(mem, 0, PGSIZE);
+            cprintf("map: pid: %d, va %d, pa %d\n",myproc()->pid,(void*)a,V2P(mem));
+            if (mappages(pgdir, (char *) a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
+                cprintf("allocuvm out of memory (2)\n");
+                deallocuvm(pgdir, newsz, oldsz);
+                kfree(mem);
+                return 0;
+            }
+        }else{
+            mem = kalloc();
+            if (mem == 0) {
+                cprintf("allocuvm out of memory\n");
+                deallocuvm(pgdir, newsz, oldsz);
+                return 0;
+            }
+            memset(mem, 0, PGSIZE);
+            if (mappages(pgdir, (char *) a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
+                cprintf("allocuvm out of memory (2)\n");
+                deallocuvm(pgdir, newsz, oldsz);
+                kfree(mem);
+                return 0;
+            }
         }
-        mem = kalloc();
-        if (mem == 0) {
-            cprintf("allocuvm out of memory\n");
-            deallocuvm(pgdir, newsz, oldsz);
-            return 0;
-        }
-        memset(mem, 0, PGSIZE);
-        if (mappages(pgdir, (char *) a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
-            cprintf("allocuvm out of memory (2)\n");
-            deallocuvm(pgdir, newsz, oldsz);
-            kfree(mem);
-            return 0;
-        }
+        
     }
-    // cprintf("end of allocuvm\n");
     return newsz;
 }
 
@@ -505,37 +535,34 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
             if (pa == 0)
                 panic("kfree");
             char *v = P2V(pa);
-
             if (get_num_of_refs(v) == 1){
-              cprintf("dealloc.. kfree!\n");
+                cprintf("dealloc.. kfree!\n");
                 kfree(v);
-            }
-            else{
-              cprintf("dealloc pid: %d, for va: %d, cur ref_count to: %d\n",
-              myproc()->pid,v,get_num_of_refs(v));
+            } else {
                 update_num_of_refs(v, -1);
-               cprintf("dealloc pid: %d, for va: %d, updated ref_count to: %d\n",
-               myproc()->pid,v,get_num_of_refs(v));
+                cprintf("dealloc pid: %d, for va: %d, dec ref_count to: %d\n",
+                myproc()->pid,v,get_num_of_refs(v));
             }
             // paging
-//      if (!is_system_proc(myproc())) cprintf("dealloc for pid: %d, va: %d\n",myproc()->pid, PGROUNDUP(newsz));
+            clear_mem_page_entry(a);
+            // paging
+            *pte = 0;
+            // }
+        }
+    }
+    return newsz;
+}
 
+void clear_mem_page_entry(uint va){
             for (int i = 0; i < MAX_PSYC_PAGES; i++) {
-                if (myproc()->mem_pages[i].va == a && !myproc()->mem_pages[i].available) {
-//              if (!is_system_proc(myproc())) cprintf("dealloc: freeing from memory at entry num %d\n",i);
+                if (myproc()->mem_pages[i].va == va && !myproc()->mem_pages[i].available) {
                     myproc()->mem_pages[i].va = 0;
                     myproc()->mem_pages[i].available = 1;
-
                     myproc()->num_of_mem_pages -= 1;
                     QueueRemove(&myproc()->mem_page_q, i);
                     break;
                 }
             }
-            // paging
-            *pte = 0;
-        }
-    }
-    return newsz;
 }
 
 // Free a page table and all the physical memory pages
@@ -573,6 +600,7 @@ clearpteu(pde_t *pgdir, char *uva) {
 // Instead, increment ref count on that page (called upon a fork()) 
 pde_t *
 copyuvm_cow(pde_t *pgdir, uint sz) {
+    if(is_system_proc()) panic("sys proc using cow");
     pde_t *d;
     pte_t *pte;
     uint i, flags;
@@ -584,14 +612,13 @@ copyuvm_cow(pde_t *pgdir, uint sz) {
             panic("copyuvm_cow: pte should exist");
         if (!(*pte & PTE_P) && !(*pte & PTE_PG))
             panic("copyuvm_cow: page unknown state!");
-        if (*pte & PTE_PG) {
+        // parents swapped pages will be copied to child mem
+        if (*pte & PTE_PG) { 
             cprintf("copyuvm_cow: copy of swap\n");
-            // todo: what happens here? walkpgdir was originally 1. why?
-            pte = walkpgdir(d, (void *) i, 0);
-            *pte |= PTE_U | PTE_PG; 
-            *pte &= ~PTE_P;
-            // *pte |= PTE_COW;
-            // *pte &= ~PTE_W;
+            pte = walkpgdir(d, (void *) i, 1);
+            *pte |= PTE_U | PTE_P | PTE_W; 
+            *pte &= ~PTE_PG;
+            *pte &= ~PTE_COW;
             lcr3(V2P(pgdir));
             continue;
         }
@@ -600,6 +627,8 @@ copyuvm_cow(pde_t *pgdir, uint sz) {
 
         uint pa = PTE_ADDR(*pte);
         flags = PTE_FLAGS(*pte);
+        cprintf("map: pid: %d, va %d, pa %d\n",
+            myproc()->pid,(void*)i,pa);
         if (mappages(d, (void *) i, PGSIZE, pa, flags) < 0) {
             goto bad;
         }
@@ -608,7 +637,7 @@ copyuvm_cow(pde_t *pgdir, uint sz) {
         update_num_of_refs(P2V(pa), 1);
         cprintf("pid: %d, for va: %d, updated ref_count to: %d\n",
          myproc()->pid,P2V(pa),get_num_of_refs(P2V(pa)));
-         lcr3(V2P(pgdir));
+        lcr3(V2P(pgdir));
     }
     return d;
 
@@ -638,6 +667,7 @@ copyuvm(pde_t *pgdir, uint sz) {
         if ((mem = kalloc()) == 0)
             goto bad;
         memmove(mem, (char *) P2V(pa), PGSIZE);
+
         if (mappages(d, (void *) i, PGSIZE, V2P(mem), flags) < 0) {
             cprintf("mappings failed\n");
             kfree(mem);
@@ -693,12 +723,13 @@ copyout(pde_t *pgdir, uint va, void *p, uint len) {
 void handle_page_fault(uint pgFaultAddr) {
     uint rounded_p_fault = PGROUNDDOWN(pgFaultAddr);
     pte_t *pte = walkpgdir(myproc()->pgdir, (void *) rounded_p_fault, 0);
-    // P2V(PTE_ADDR(*pte))
-    cprintf("pid: %d, page fault: %d, cow: %d, pg: %d\n", myproc()->pid,rounded_p_fault, *pte & PTE_COW, *pte & PTE_PG);
+    
+    cprintf("pid: %d, page fault: %d, cow: %d, pg: %d\n", 
+        myproc()->pid,P2V(PTE_ADDR(*pte)), *pte & PTE_COW, *pte & PTE_PG);
     print_process_mem_data(0);
     if (*pte & PTE_COW) {
         // cprintf("page fault: cow\n");
-        handle_copy_cow(pgFaultAddr, myproc()->pgdir);
+        handle_cow_fault(pgFaultAddr, myproc()->pgdir);
     }
 
     if (*pte & PTE_PG) {

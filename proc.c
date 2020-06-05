@@ -180,18 +180,18 @@ growproc(int n) {
 }
 
 void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
-    to_p->num_of_mem_pages = from_p->num_of_mem_pages;
-    to_p->num_of_swap_pages = from_p->num_of_swap_pages;
+    // mempages of child will only contain the swappedpages of parent
+    // mempages of parent will be shared via their PTEs
+    to_p->num_of_mem_pages = from_p->num_of_swap_pages;
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
-        to_p->mem_pages[i].va = from_p->mem_pages[i].va;
-        to_p->mem_pages[i].available = from_p->mem_pages[i].available;
+        to_p->mem_pages[i].va = from_p->swapped_pages[i].va;
+        to_p->mem_pages[i].available = from_p->swapped_pages[i].available;
     }
-    for (int i = 0; i < MAX_SWAP_PAGES; ++i) {
-        to_p->swapped_pages[i].va = from_p->swapped_pages[i].va;
-        to_p->swapped_pages[i].available = from_p->swapped_pages[i].available;
-        to_p->swapped_pages[i].place_in_file = from_p->swapped_pages[i].place_in_file;
+    QueueInit(&to_p->mem_page_q);
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+       if(!to_p->mem_pages[i].available) QueuePut(i, &to_p->mem_page_q);
     }
-    QueueCopy(&from_p->mem_page_q, &to_p->mem_page_q);
+
 }
 
 void init_proc_page_data(struct proc* p){
@@ -226,7 +226,7 @@ fork(void) {
 
     // Copy process state from proc.
 //    if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0) {
-    if (is_system_proc(curproc)){
+    if (is_system_proc()){
         np->pgdir = copyuvm(curproc->pgdir, curproc->sz);
     } else {
         np->pgdir = copyuvm_cow(curproc->pgdir, curproc->sz);
@@ -255,7 +255,7 @@ fork(void) {
     pid = np->pid;
 
     //paging
-    if (!is_system_proc(curproc)){  // if there is a swap file to copy from
+    if (!is_system_proc()){  // if there is a swap file to copy from
         copy_proc_page_data(curproc, np);
         createSwapFile(np);
         if(copy_swap_file(curproc, np) < 0)
@@ -339,8 +339,11 @@ wait(void) {
                 // Found one.
                 pid = p->pid;
                 cprintf("proc.c kfree kstack\n");
-                if(get_num_of_refs(p->kstack)>1) update_num_of_refs(p->kstack,-1);
-                else kfree(p->kstack);
+                    if(get_num_of_refs(p->kstack)>1) update_num_of_refs(p->kstack,-1);
+                    else{
+                        cprintf("freeing pid: %d kstack\n",p->pid);
+                         kfree(p->kstack);
+                    }
                 p->kstack = 0;
                 freevm(p->pgdir);
                 p->pid = 0;

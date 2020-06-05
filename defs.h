@@ -208,10 +208,12 @@ void            move_page_to_swap(uint,pde_t*);
 void            handle_page_fault(uint);
 void            writePageToSwapFile(uint, int);
 int             find_next_available_mempage();
-int             is_system_proc(struct proc* p);
+int             is_system_proc();
 int             find_next_available_swappage();
-int             pick_page_to_replace(int policy, uint new_page_va, pde_t *pgdir);
+int             pick_page_to_replace(int policy, pde_t *pgdir);
 void            print_process_mem_data(uint);
+void            clear_mem_page_entry(uint);
+
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
