@@ -9,8 +9,13 @@ typedef uint pde_t;
 #define MAX_TOTAL_PAGES 32
 #define MAX_SWAP_PAGES (MAX_TOTAL_PAGES - MAX_PSYC_PAGES)
 
-
+#ifndef NONE
 #define QUEUE_ELEMENTS 16
+#endif
+#ifdef NONE
+#define QUEUE_ELEMENTS 200
+#endif
+
 #define QUEUE_SIZE (QUEUE_ELEMENTS + 1)
 
 #define MAX_PAGES (PHYSTOP / PGSIZE)

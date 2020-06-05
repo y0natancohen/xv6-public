@@ -737,6 +737,7 @@ removeSwapFile(struct proc *p) {
 }
 
 int copy_swap_file(struct proc *from_p, struct proc *to_p) {
+#ifndef NONE
     char buf[PGSIZE/2];
     int off = 0;
     int exit_code;
@@ -756,6 +757,10 @@ int copy_swap_file(struct proc *from_p, struct proc *to_p) {
         panic("could not write to child swapFile");        
     } 
     return 0;
+#endif
+#ifdef NONE
+    return 0;
+#endif
 }
 
 

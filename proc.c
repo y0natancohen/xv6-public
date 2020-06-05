@@ -226,11 +226,16 @@ fork(void) {
 
     // Copy process state from proc.
 //    if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0) {
+#ifdef NONE
+    np->pgdir = copyuvm(curproc->pgdir, curproc->sz);
+#endif
+#ifndef NONE
     if (is_system_proc()){
         np->pgdir = copyuvm(curproc->pgdir, curproc->sz);
     } else {
         np->pgdir = copyuvm_cow(curproc->pgdir, curproc->sz);
     }
+#endif
     if (np->pgdir == 0) {
         kfree(np->kstack);
         np->kstack = 0;

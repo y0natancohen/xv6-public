@@ -213,6 +213,7 @@ int             find_next_available_swappage();
 int             pick_page_to_replace(int policy, pde_t *pgdir);
 void            print_process_mem_data(uint);
 void            clear_mem_page_entry(uint);
+void            update_paging_data();
 
 
 // number of elements in fixed-size array

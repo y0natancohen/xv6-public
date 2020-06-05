@@ -236,7 +236,7 @@ void handle_cow_fault(uint cow_fault_addr, pde_t *pgdir) {
             myproc()->num_of_mem_pages += 1;
             QueuePut(free_i, &myproc()->mem_page_q);
         } else{
-            cprintf("move_page_to_swap, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,
+            cprintf("cow fault, move_page_to_swap, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,
                         myproc()->num_of_mem_pages);
                 move_page_to_swap(cow_fault_addr_rounded, pgdir);
         }
@@ -448,7 +448,8 @@ int find_next_available_mempage() {
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
-    // cprintf("inside allocuvm!\n");
+#ifndef NONE
+//     cprintf("--------------ifndef NONE------------------\n");
     char *mem;
     uint a;
 
@@ -475,7 +476,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
                 // cprintf("QueuePut: %d\n", free_i);
 
             } else {
-                cprintf("move_page_to_swap, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,
+                cprintf("allocuvm, move_page_to_swap, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,
                         myproc()->num_of_mem_pages);
                 move_page_to_swap(a, pgdir);
             }
@@ -511,6 +512,73 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         
     }
     return newsz;
+#endif
+#ifdef NONE
+//    cprintf("--------------ifdef NONE------------------\n");
+    // cprintf("inside allocuvm!\n");
+    char *mem;
+    uint a;
+
+    if (newsz >= KERNBASE)
+        return 0;
+    if (newsz < oldsz)
+        return oldsz;
+
+    a = PGROUNDUP(oldsz);
+    for (; a < newsz; a += PGSIZE) {
+        if (!is_system_proc()) {
+//            if (myproc()->num_of_mem_pages + myproc()->num_of_swap_pages > MAX_TOTAL_PAGES) {
+//                panic("max total pages cannot exceed 32");
+//            }
+//            if (myproc()->num_of_mem_pages < MAX_PSYC_PAGES) {
+                // cprintf("alloc for pid: %d, num of mem pages: %d, a: %d, pgdir: %d\n"
+                //   ,myproc()->pid,myproc()->num_of_mem_pages,a, pgdir);
+            int free_i = find_next_available_mempage();
+            myproc()->mem_pages[free_i].va = a;
+            myproc()->mem_pages[free_i].available = 0;
+            myproc()->num_of_mem_pages += 1;
+
+            QueuePut(free_i, &myproc()->mem_page_q);
+                // cprintf("QueuePut: %d\n", free_i);
+
+//            } else {
+//                cprintf("allocuvm, move_page_to_swap, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,
+//                        myproc()->num_of_mem_pages);
+//                move_page_to_swap(a, pgdir);
+//            }
+            mem = kalloc();
+            if (mem == 0) {
+                cprintf("allocuvm out of memory\n");
+                deallocuvm(pgdir, newsz, oldsz);
+                return 0;
+            }
+            memset(mem, 0, PGSIZE);
+            cprintf("map: pid: %d, va %d, pa %d\n",myproc()->pid,(void*)a,V2P(mem));
+            if (mappages(pgdir, (char *) a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
+                cprintf("allocuvm out of memory (2)\n");
+                deallocuvm(pgdir, newsz, oldsz);
+                kfree(mem);
+                return 0;
+            }
+        }else{
+            mem = kalloc();
+            if (mem == 0) {
+                cprintf("allocuvm out of memory\n");
+                deallocuvm(pgdir, newsz, oldsz);
+                return 0;
+            }
+            memset(mem, 0, PGSIZE);
+            if (mappages(pgdir, (char *) a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
+                cprintf("allocuvm out of memory (2)\n");
+                deallocuvm(pgdir, newsz, oldsz);
+                kfree(mem);
+                return 0;
+            }
+        }
+
+    }
+    return newsz;
+#endif
 }
 
 // Deallocate user pages to bring the process size from oldsz to
@@ -536,7 +604,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
                 panic("kfree");
             char *v = P2V(pa);
             if (get_num_of_refs(v) == 1){
-                cprintf("dealloc.. kfree!\n");
+//                cprintf("dealloc.. kfree!\n");
                 kfree(v);
             } else {
                 update_num_of_refs(v, -1);
@@ -736,6 +804,19 @@ void handle_page_fault(uint pgFaultAddr) {
         // cprintf("page fault: swap_pages\n");
         swap_pages(pgFaultAddr, myproc()->pgdir);
     }
+}
+
+void update_paging_data(){
+    struct proc* p = myproc();
+    pte_t *pte;
+#ifdef NFUA
+    for (int i = 0; i < MAX_PSYC_PAGES; i++){
+        pte = walkpgdir(p->pgdir, p->mem_pages[i].va, 0);
+        if (*pte &PTE_A){
+
+        }
+    }
+#endif
 }
 
 //PAGEBREAK!
