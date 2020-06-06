@@ -211,9 +211,12 @@ int             find_next_available_mempage();
 int             is_system_proc();
 int             find_next_available_swappage();
 int             pick_page_to_replace(pde_t *pgdir);
+int             _pick_page_to_replace(pde_t *pgdir);
 void            print_process_mem_data(uint);
 void            clear_mem_page_entry(uint);
 void            update_paging_data();
+void load_mem_page_entry_to_mem(uint va, int index);
+
 
 
 // number of elements in fixed-size array
@@ -227,3 +230,5 @@ int QueuePut(int x, struct queue* q);
 int QueueGet(struct queue *q);
 void QueueRemove(struct queue* q, int x);
 void QueuePrint(struct queue* q);
+void QueuePrint(struct queue* q);
+void QueueMoveBackOne(int x, struct queue* q);

@@ -213,6 +213,18 @@ int is_system_proc() {
     return (myproc()->pid <= 2);
 }
 
+void load_mem_page_entry_to_mem(uint va, int index){
+    struct proc* p = myproc();
+    p->mem_pages[index].va = va;
+    p->mem_pages[index].available = 0;
+#ifdef NFUA
+    p->mem_pages[index].nfu_counter = 0;
+#endif
+#ifdef LAPA
+    p->mem_pages[index].nfu_counter = ALL_ONES;
+#endif
+}
+
 
 void handle_cow_fault(uint cow_fault_addr, pde_t *pgdir) {
     if (is_system_proc()) return;
@@ -231,11 +243,14 @@ void handle_cow_fault(uint cow_fault_addr, pde_t *pgdir) {
         // todo: kill a process if he is asking cow but there is no more memory
         if(myproc()->num_of_mem_pages<MAX_PSYC_PAGES){
             int free_i = find_next_available_mempage();
-            myproc()->mem_pages[free_i].va = cow_fault_addr_rounded;
-            myproc()->mem_pages[free_i].available = 0;
-            myproc()->mem_pages[free_i].nfu_counter = 0;
+            myproc()->dont_touch_me = 1;
+            load_mem_page_entry_to_mem(cow_fault_addr_rounded, free_i);
+//            myproc()->mem_pages[free_i].va = cow_fault_addr_rounded;
+//            myproc()->mem_pages[free_i].available = 0;
+//            myproc()->mem_pages[free_i].nfu_counter = 0;
             myproc()->num_of_mem_pages += 1;
             QueuePut(free_i, &myproc()->mem_page_q);
+            myproc()->dont_touch_me = 0;
         } else{
             cprintf("cow fault, move_page_to_swap, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,
                         myproc()->num_of_mem_pages);
@@ -264,11 +279,16 @@ void handle_cow_fault(uint cow_fault_addr, pde_t *pgdir) {
 }
 
 void print_process_mem_data(uint pg_fault_adrr){
-    uint page_fault_addr_rounded = PGROUNDDOWN(pg_fault_adrr);
-    cprintf("page fault addr: %d, rounded: %d, pid: %d\n", pg_fault_adrr, page_fault_addr_rounded, myproc()->pid);
+//    uint page_fault_addr_rounded = PGROUNDDOWN(pg_fault_adrr);
+//    cprintf("page fault addr: %d, rounded: %d, pid: %d\n", pg_fault_adrr, page_fault_addr_rounded, myproc()->pid);
     cprintf("%d mem pages\n", myproc()->num_of_mem_pages);
     for (int i = 0; i < MAX_PSYC_PAGES; i++) {
         cprintf("[%d,%d] ", myproc()->mem_pages[i].va, myproc()->mem_pages[i].available);
+    }
+    cprintf("\n");
+    cprintf("nfu counters:\n");
+    for (int i = 0; i < MAX_PSYC_PAGES; i++) {
+        cprintf("[%x] ", myproc()->mem_pages[i].nfu_counter);
     }
     cprintf("\n");
     cprintf("%d swap pages\n", myproc()->num_of_swap_pages);
@@ -281,13 +301,11 @@ void print_process_mem_data(uint pg_fault_adrr){
 void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     if (is_system_proc()) return;
     uint page_fault_addr_rounded = PGROUNDDOWN(page_fault_addr);
-
-    int debug = 0;
-    if (debug) {
-        print_process_mem_data(page_fault_addr);
-    }
+//    cprintf("--------------swap_pages-----------------\n");
+//    if (1) print_process_mem_data(page_fault_addr);
 
     // choose mem_page from mem_pages to write to swap
+    myproc()->dont_touch_me = 1;
     int ind_page_to_replace = pick_page_to_replace(pgdir);
     struct mem_page page_to_swap = myproc()->mem_pages[ind_page_to_replace];
     int swap_index = find_next_available_swappage();
@@ -326,7 +344,7 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     *new_pte &= ~PTE_PG;
 
     // set ref count=1 to the file just came from swap
-    cprintf("reseting ref_count for page came from swap!\n");
+//    cprintf("reseting ref_count for page came from swap!\n");
     update_num_of_refs(P2V(PTE_ADDR(*new_pte)), 1);
 
     // load addr from swap file to ram
@@ -344,10 +362,12 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     myproc()->swapped_pages[index_to_read_from].va = 0;
 
     // update mem pages struct
-    myproc()->mem_pages[ind_page_to_replace].va = page_fault_addr_rounded;
-    myproc()->mem_pages[ind_page_to_replace].available = 0;
-    myproc()->mem_pages[ind_page_to_replace].nfu_counter = 0;
+    load_mem_page_entry_to_mem(page_fault_addr_rounded, ind_page_to_replace);
+//    myproc()->mem_pages[ind_page_to_replace].va = page_fault_addr_rounded;
+//    myproc()->mem_pages[ind_page_to_replace].available = 0;
+//    myproc()->mem_pages[ind_page_to_replace].nfu_counter = 0;
     QueuePut(ind_page_to_replace, &myproc()->mem_page_q);
+    myproc()->dont_touch_me = 0;
 
     // refresh TLB
     lcr3(V2P(pgdir));
@@ -365,10 +385,10 @@ int get_num_of_ones(uint x){
 }
 
 void move_page_to_swap(uint new_page, pde_t *pgdir) {
-    // cprintf("move_page_to_swap pid: %d\n", myproc()->pid);
     if (is_system_proc()) return;
 
     // choose mem_page from mem_pages to write to swap
+    myproc()->dont_touch_me = 1; // prevent trap updates of the Queue
     int ind_page_to_replace = pick_page_to_replace(pgdir); // also takes out from q
     // cprintf("move_page_to_swap pick_page_to_replace: %d\n", ind_page_to_replace);
 
@@ -386,7 +406,7 @@ void move_page_to_swap(uint new_page, pde_t *pgdir) {
         panic("move_page_to_swap: old_pte is empty");
     char* old_v_addr = P2V(PTE_ADDR(*old_pte));
     int refsToSwappedFile = get_num_of_refs(old_v_addr);
-    cprintf("move_page_to_swap: page with %d refs was swapped!\n",refsToSwappedFile);
+//    if (1) print_process_mem_data(0);
     if(refsToSwappedFile == 1) {
         cprintf("move_page_to_swap.. kfree!\n");
         *old_pte &= ~PTE_P;
@@ -396,17 +416,22 @@ void move_page_to_swap(uint new_page, pde_t *pgdir) {
         cprintf("move_page_to_swap: pid: %d, dec count for swapped page %d\n",myproc()->pid,old_v_addr);
         update_num_of_refs(old_v_addr, -1);
     }
+
     *old_pte |=  PTE_U | PTE_PG;
     // | PTE_W - todo: cow+fork decide which flags needed
     // *old_pte &= ~PTE_P;
-
-    myproc()->mem_pages[ind_page_to_replace].va = new_page;
-    myproc()->mem_pages[ind_page_to_replace].available = 0;
-    myproc()->mem_pages[ind_page_to_replace].nfu_counter = 0;
-
-    QueuePut(ind_page_to_replace, &myproc()->mem_page_q);
+    cprintf("ind_page_to_replace : %d\n", ind_page_to_replace);
+    load_mem_page_entry_to_mem(new_page, ind_page_to_replace);
+//    myproc()->mem_pages[ind_page_to_replace].va = new_page;
+//    myproc()->mem_pages[ind_page_to_replace].available = 0;
+//    myproc()->mem_pages[ind_page_to_replace].nfu_counter = 0;
 
     myproc()->num_of_swap_pages += 1;
+
+//    cprintf("QueuePut of %d \n", ind_page_to_replace);
+    QueuePut(ind_page_to_replace, &myproc()->mem_page_q);
+    myproc()->dont_touch_me = 0;
+
     // refresh TLB
     lcr3(V2P(pgdir));
 }
@@ -414,6 +439,7 @@ void move_page_to_swap(uint new_page, pde_t *pgdir) {
 int find_next_available_swappage() {
     for (int i = 0; i < MAX_PSYC_PAGES; i++) {
         if (myproc()->swapped_pages[i].available) {
+//            cprintf("find_next_available_swappage return: %d\n", i);
             return i;
         }
     }
@@ -453,12 +479,15 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
                 // cprintf("alloc for pid: %d, num of mem pages: %d, a: %d, pgdir: %d\n"
                 //   ,myproc()->pid,myproc()->num_of_mem_pages,a, pgdir);
                 int free_i = find_next_available_mempage();
-                myproc()->mem_pages[free_i].va = a;
-                myproc()->mem_pages[free_i].available = 0;
-                myproc()->mem_pages[free_i].nfu_counter = 0;
+                myproc()->dont_touch_me = 1;
+                load_mem_page_entry_to_mem(a, free_i);
+//                myproc()->mem_pages[free_i].va = a;
+//                myproc()->mem_pages[free_i].available = 0;
+//                myproc()->mem_pages[free_i].nfu_counter = 0;
                 myproc()->num_of_mem_pages += 1;
 
                 QueuePut(free_i, &myproc()->mem_page_q);
+                myproc()->dont_touch_me = 0;
                 // cprintf("QueuePut: %d\n", free_i);
 
             } else {
@@ -513,25 +542,11 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     a = PGROUNDUP(oldsz);
     for (; a < newsz; a += PGSIZE) {
         if (!is_system_proc()) {
-//            if (myproc()->num_of_mem_pages + myproc()->num_of_swap_pages > MAX_TOTAL_PAGES) {
-//                panic("max total pages cannot exceed 32");
-//            }
-//            if (myproc()->num_of_mem_pages < MAX_PSYC_PAGES) {
-                // cprintf("alloc for pid: %d, num of mem pages: %d, a: %d, pgdir: %d\n"
-                //   ,myproc()->pid,myproc()->num_of_mem_pages,a, pgdir);
             int free_i = find_next_available_mempage();
             myproc()->mem_pages[free_i].va = a;
             myproc()->mem_pages[free_i].available = 0;
             myproc()->num_of_mem_pages += 1;
-
             QueuePut(free_i, &myproc()->mem_page_q);
-                // cprintf("QueuePut: %d\n", free_i);
-
-//            } else {
-//                cprintf("allocuvm, move_page_to_swap, num of swap pages: %d, num of mem pages: %d\n", myproc()->num_of_swap_pages,
-//                        myproc()->num_of_mem_pages);
-//                move_page_to_swap(a, pgdir);
-//            }
             mem = kalloc();
             if (mem == 0) {
                 cprintf("allocuvm out of memory\n");
@@ -781,7 +796,7 @@ void handle_page_fault(uint pgFaultAddr) {
     
     cprintf("pid: %d, page fault: %d, cow: %d, pg: %d\n", 
         myproc()->pid,P2V(PTE_ADDR(*pte)), *pte & PTE_COW, *pte & PTE_PG);
-    if (1) print_process_mem_data(0);
+//    if (1) print_process_mem_data(0);
     if (*pte & PTE_COW) {
         // cprintf("page fault: cow\n");
         handle_cow_fault(pgFaultAddr, myproc()->pgdir);
@@ -794,6 +809,15 @@ void handle_page_fault(uint pgFaultAddr) {
 }
 
 int pick_page_to_replace(pde_t *pgdir) {
+    if (0) print_process_mem_data(0);
+    int i = _pick_page_to_replace(pgdir);
+    cprintf("picked page: %d\n", i);
+    return i;
+}
+int _pick_page_to_replace(pde_t *pgdir) {
+#ifdef AQ
+    return QueueGet(&myproc()->mem_page_q);
+#endif
 #ifdef SCFIFO
     while (1) {
         int next = QueueGet(&myproc()->mem_page_q);
@@ -804,6 +828,7 @@ int pick_page_to_replace(pde_t *pgdir) {
             panic("swap_pages: old_pte is empty");
 
         if (*pte & PTE_A) { // second chance
+            cprintf("index %d (with va: %d) was a good boy, giving second chance\n", next, myproc()->mem_pages[next].va);
             QueuePut(next, &myproc()->mem_page_q);
             *pte &= ~PTE_A;
         } else {
@@ -824,28 +849,29 @@ int pick_page_to_replace(pde_t *pgdir) {
     int lowest_index = -1;
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
         if (!myproc()->mem_pages[i].available){
-            if (myproc()->mem_pages[i].nfu_counter < lowest){
+            if (myproc()->mem_pages[i].nfu_counter <= lowest){
                 lowest = myproc()->mem_pages[i].nfu_counter;
                 lowest_index = i;
             }
         }
     }
+    if (lowest_index == -1)
+        panic("NFU didnt find anyone :(");
     return lowest_index;
 #endif
-    // todo LAPA : reset counter to 0xffffffff every time
 #ifdef LAPA
     uint lowest_num_of_ones = 0; // not really lowest_num_of_ones
     // set someone to lowest_num_of_ones
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
         if (!myproc()->mem_pages[i].available){
-            lowest_num_of_ones = myproc()->mem_pages[i].nfu_counter;
+            lowest_num_of_ones = get_num_of_ones(myproc()->mem_pages[i].nfu_counter);
             break;
         }
     }
     //find lowest_num_of_ones
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
         if (!myproc()->mem_pages[i].available){
-            if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter) < lowest_num_of_ones){
+            if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter) <= lowest_num_of_ones){
                 lowest_num_of_ones = get_num_of_ones(myproc()->mem_pages[i].nfu_counter);
             }
         }
@@ -853,7 +879,7 @@ int pick_page_to_replace(pde_t *pgdir) {
 
     //find lowest from lowest_num_of_ones
 
-    // set someone to lowest
+    // set someone to be lowest
     uint lowest = 0;
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
         if (!myproc()->mem_pages[i].available){
@@ -869,14 +895,15 @@ int pick_page_to_replace(pde_t *pgdir) {
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
         if (!myproc()->mem_pages[i].available){
             if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter)  == lowest_num_of_ones){
-                if (myproc()->mem_pages[i].nfu_counter < lowest){
+                if (myproc()->mem_pages[i].nfu_counter <= lowest){
                     lowest = myproc()->mem_pages[i].nfu_counter;
                     lowest_index = i;
                 }
             }
         }
     }
-
+    if (lowest_index == -1)
+        panic("LAPA lowest_index not found");
     return lowest_index;
 #endif
     panic("pick_page_to_replace with no policy");
@@ -886,22 +913,43 @@ void update_paging_data_nfu_lapa(){
     struct proc* p = myproc();
     pte_t *pte;
     for (int i = 0; i < MAX_PSYC_PAGES; i++){
-        if (p->mem_pages[i].available == 0){
+        if (p->mem_pages[i].available == 0 && !p->dont_touch_me){
             p->mem_pages[i].nfu_counter >>= 1;
+            uint counter = p->mem_pages[i].nfu_counter;
             pte = walkpgdir(p->pgdir, (void*)p->mem_pages[i].va, 0);
             if (*pte & PTE_A){
-                p->mem_pages[i].nfu_counter |= LEFT_MOST_BIT;
+                counter |= LEFT_MOST_BIT;
+//                cprintf("updating nfu/lapa counter at index: %d, from: %x to %x\n", i, p->mem_pages[i].nfu_counter, counter);
+                p->mem_pages[i].nfu_counter = counter;
+                *pte &= ~PTE_A;
+            }
+        }
+    }
+}
+
+void update_paging_data_aq(){
+    struct proc* p = myproc();
+    pte_t *pte;
+    for (int i = 0; i < MAX_PSYC_PAGES; i++){
+        if (p->mem_pages[i].available == 0 && !p->dont_touch_me){
+            pte = walkpgdir(p->pgdir, (void*)p->mem_pages[i].va, 0);
+            if (*pte & PTE_A){
+                QueueMoveBackOne(i, &p->mem_page_q);
                 *pte &= ~PTE_A;
             }
         }
     }
 }
 void update_paging_data(){
+//    cprintf("update_paging_data\n");
 #ifdef NFUA
     update_paging_data_nfu_lapa();
 #endif
 #ifdef LAPA
     update_paging_data_nfu_lapa();
+#endif
+#ifdef AQ
+    update_paging_data_aq();
 #endif
 }
 

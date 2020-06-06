@@ -81,6 +81,7 @@ struct proc {
 //  struct freepg *head;        // Head of the pages in physical memory linked list
 //  struct freepg *tail;        // End of the pages in physical memory linked list
   struct mem_page mem_pages[MAX_PSYC_PAGES];
+  int dont_touch_me;
 
   struct queue mem_page_q;
 };

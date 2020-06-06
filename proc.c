@@ -114,6 +114,7 @@ allocproc(void) {
     // paging
     // cprintf("allocproc: init page data\n");
     init_proc_page_data(p);
+    p->dont_touch_me = 1; // ok to touch me
     // QueueInit(p->mem_page_q);
     //paging
 
@@ -186,7 +187,12 @@ void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
         to_p->mem_pages[i].va = from_p->swapped_pages[i].va;
         to_p->mem_pages[i].available = from_p->swapped_pages[i].available;
+#ifdef NFUA
         to_p->mem_pages[i].nfu_counter = 0;
+#endif
+#ifdef LAPA
+        to_p->mem_pages[i].nfu_counter = ALL_ONES;
+#endif
     }
     QueueInit(&to_p->mem_page_q);
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
@@ -207,7 +213,12 @@ void init_proc_page_data(struct proc* p){
     for (int i = 0; i < MAX_PSYC_PAGES; i++) {
         p->mem_pages[i].va = 0;
         p->mem_pages[i].available = 1;
+#ifdef NFUA
         p->mem_pages[i].nfu_counter = 0;
+#endif
+#ifdef LAPA
+        p->mem_pages[i].nfu_counter = ALL_ONES;
+#endif
     }
 }
 
