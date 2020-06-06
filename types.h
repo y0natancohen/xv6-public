@@ -21,6 +21,7 @@ typedef uint pde_t;
 #define MAX_PAGES (PHYSTOP / PGSIZE)
 
 #define LEFT_MOST_BIT (1 << 31)
+#define ALL_ONES 0xFFFFFFFF
 
 struct queue
 {

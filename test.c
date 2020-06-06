@@ -70,7 +70,7 @@ void simple_fork(){
 }
 
 void swap_no_fork() {
-    int pages = 25;
+    int pages = 17;
     // printf(1, "asking for %d pages\n",pages);
     char *buf = malloc(4096 * pages);
     for (int i = 0; i < pages; i++) {
@@ -87,9 +87,10 @@ void swap_no_fork() {
 }
 
 int main(int argc, char *argv[]) {
-     fork_cow_no_swap();
-//    swap_no_fork();
+//     fork_cow_no_swap();
+    swap_no_fork();
+
+//     fork_cow_with_swap(); // not working
     // simple_fork();
-//     fork_cow_with_swap();
     exit();
 }
