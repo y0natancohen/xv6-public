@@ -78,10 +78,6 @@ int size_of_q(struct queue* q){
 int is_last(int x, struct queue* q){
     int where_x_is = get_index_of(x, q);
     int size = size_of_q(q);
-//    cprintf("where_x_is: %d\n", where_x_is);
-//    cprintf("size: %d\n", size);
-//    cprintf("q->QueueIn: %d\n", q->QueueIn);
-//    cprintf("q->QueueOut: %d\n", q->QueueOut);
     if ((where_x_is + 1) == size){
         return 1;
     } else {
@@ -97,7 +93,6 @@ void QueueMoveBackOne(int x, struct queue* q)
     {
         return; /* Queue Empty */
     }
-    cprintf("is_last: %d\n", is_last(x, q));
     if (is_last(x, q)){
         return;
     }
@@ -157,10 +152,10 @@ void QueuePrint(struct queue* q)
 //    cprintf("q out: %d\n", q->QueueOut);
     int i = q->QueueOut;
     while (i != q->QueueIn){
-        cprintf("%d,", q->Queue[i]);
+        // cprintf("%d,", q->Queue[i]);
         i = (i +1) % QUEUE_SIZE;
     }
-    cprintf("\n");
+    // cprintf("\n");
 
 }
 

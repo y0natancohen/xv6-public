@@ -230,5 +230,4 @@ int QueuePut(int x, struct queue* q);
 int QueueGet(struct queue *q);
 void QueueRemove(struct queue* q, int x);
 void QueuePrint(struct queue* q);
-void QueuePrint(struct queue* q);
 void QueueMoveBackOne(int x, struct queue* q);
