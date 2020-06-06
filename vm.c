@@ -927,6 +927,7 @@ void update_paging_data_nfu_lapa(){
     }
 }
 
+
 void update_paging_data_aq(){
     struct proc* p = myproc();
     pte_t *pte;
