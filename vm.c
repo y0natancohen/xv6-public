@@ -353,95 +353,6 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     lcr3(V2P(pgdir));
 }
 
-int pick_page_to_replace(pde_t *pgdir) {
-#ifdef SCFIFO
-    while (1) {
-        int next = QueueGet(&myproc()->mem_page_q);
-        // cprintf("next is: %d\n", next);
-
-        pte_t *pte = walkpgdir(pgdir, (void *) myproc()->mem_pages[next].va, 0);
-        if (!*pte)
-            panic("swap_pages: old_pte is empty");
-
-        if (*pte & PTE_A) { // second chance
-            QueuePut(next, &myproc()->mem_page_q);
-            *pte &= ~PTE_A;
-        } else {
-            return next;
-        }
-    }
-#endif
-#ifdef NFUA
-    uint lowest = 0; // not really lowest
-    // set someone to lowest
-    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
-        if (!myproc()->mem_pages[i].available){
-            lowest = myproc()->mem_pages[i].nfu_counter;
-            break;
-        }
-    }
-    //find real lowest
-    int lowest_index = -1;
-    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
-        if (!myproc()->mem_pages[i].available){
-            if (myproc()->mem_pages[i].nfu_counter < lowest){
-                lowest = myproc()->mem_pages[i].nfu_counter;
-                lowest_index = i;
-            }
-        }
-    }
-    return lowest_index;
-#endif
-    // todo LAPA : reset counter to 0xffffffff every time
-#ifdef LAPA
-    uint lowest_num_of_ones = 0; // not really lowest_num_of_ones
-    // set someone to lowest_num_of_ones
-    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
-        if (!myproc()->mem_pages[i].available){
-            lowest_num_of_ones = myproc()->mem_pages[i].nfu_counter;
-            break;
-        }
-    }
-    //find lowest_num_of_ones
-    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
-        if (!myproc()->mem_pages[i].available){
-            if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter) < lowest_num_of_ones){
-                lowest_num_of_ones = get_num_of_ones(myproc()->mem_pages[i].nfu_counter);
-            }
-        }
-    }
-
-    //find lowest from lowest_num_of_ones
-
-    // set someone to lowest
-    uint lowest = 0;
-    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
-        if (!myproc()->mem_pages[i].available){
-            if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter)  == lowest_num_of_ones){
-                lowest = myproc()->mem_pages[i].nfu_counter;
-                break;
-            }
-        }
-    }
-
-    // find lowest
-    int lowest_index = -1;
-    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
-        if (!myproc()->mem_pages[i].available){
-            if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter)  == lowest_num_of_ones){
-                if (myproc()->mem_pages[i].nfu_counter < lowest){
-                    lowest = myproc()->mem_pages[i].nfu_counter;
-                    lowest_index = i;
-                }
-            }
-        }
-    }
-
-    return lowest_index;
-#endif
-    panic("pick_page_to_replace with no policy");
-}
-
 int get_num_of_ones(uint x){
     int num_of_ones = 0;
     uint bit = 1;
@@ -870,7 +781,7 @@ void handle_page_fault(uint pgFaultAddr) {
     
     cprintf("pid: %d, page fault: %d, cow: %d, pg: %d\n", 
         myproc()->pid,P2V(PTE_ADDR(*pte)), *pte & PTE_COW, *pte & PTE_PG);
-    if (0) print_process_mem_data(0);
+    if (1) print_process_mem_data(0);
     if (*pte & PTE_COW) {
         // cprintf("page fault: cow\n");
         handle_cow_fault(pgFaultAddr, myproc()->pgdir);
@@ -882,6 +793,95 @@ void handle_page_fault(uint pgFaultAddr) {
     }
 }
 
+int pick_page_to_replace(pde_t *pgdir) {
+#ifdef SCFIFO
+    while (1) {
+        int next = QueueGet(&myproc()->mem_page_q);
+        // cprintf("next is: %d\n", next);
+
+        pte_t *pte = walkpgdir(pgdir, (void *) myproc()->mem_pages[next].va, 0);
+        if (!*pte)
+            panic("swap_pages: old_pte is empty");
+
+        if (*pte & PTE_A) { // second chance
+            QueuePut(next, &myproc()->mem_page_q);
+            *pte &= ~PTE_A;
+        } else {
+            return next;
+        }
+    }
+#endif
+#ifdef NFUA
+    uint lowest = 0; // not really lowest
+    // set someone to lowest
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+        if (!myproc()->mem_pages[i].available){
+            lowest = myproc()->mem_pages[i].nfu_counter;
+            break;
+        }
+    }
+    //find real lowest
+    int lowest_index = -1;
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+        if (!myproc()->mem_pages[i].available){
+            if (myproc()->mem_pages[i].nfu_counter < lowest){
+                lowest = myproc()->mem_pages[i].nfu_counter;
+                lowest_index = i;
+            }
+        }
+    }
+    return lowest_index;
+#endif
+    // todo LAPA : reset counter to 0xffffffff every time
+#ifdef LAPA
+    uint lowest_num_of_ones = 0; // not really lowest_num_of_ones
+    // set someone to lowest_num_of_ones
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+        if (!myproc()->mem_pages[i].available){
+            lowest_num_of_ones = myproc()->mem_pages[i].nfu_counter;
+            break;
+        }
+    }
+    //find lowest_num_of_ones
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+        if (!myproc()->mem_pages[i].available){
+            if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter) < lowest_num_of_ones){
+                lowest_num_of_ones = get_num_of_ones(myproc()->mem_pages[i].nfu_counter);
+            }
+        }
+    }
+
+    //find lowest from lowest_num_of_ones
+
+    // set someone to lowest
+    uint lowest = 0;
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+        if (!myproc()->mem_pages[i].available){
+            if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter)  == lowest_num_of_ones){
+                lowest = myproc()->mem_pages[i].nfu_counter;
+                break;
+            }
+        }
+    }
+
+    // find lowest
+    int lowest_index = -1;
+    for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
+        if (!myproc()->mem_pages[i].available){
+            if (get_num_of_ones(myproc()->mem_pages[i].nfu_counter)  == lowest_num_of_ones){
+                if (myproc()->mem_pages[i].nfu_counter < lowest){
+                    lowest = myproc()->mem_pages[i].nfu_counter;
+                    lowest_index = i;
+                }
+            }
+        }
+    }
+
+    return lowest_index;
+#endif
+    panic("pick_page_to_replace with no policy");
+}
+
 void update_paging_data_nfu_lapa(){
     struct proc* p = myproc();
     pte_t *pte;
@@ -889,8 +889,9 @@ void update_paging_data_nfu_lapa(){
         if (p->mem_pages[i].available == 0){
             p->mem_pages[i].nfu_counter >>= 1;
             pte = walkpgdir(p->pgdir, (void*)p->mem_pages[i].va, 0);
-            if (*pte &PTE_A){
+            if (*pte & PTE_A){
                 p->mem_pages[i].nfu_counter |= LEFT_MOST_BIT;
+                *pte &= ~PTE_A;
             }
         }
     }
