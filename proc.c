@@ -183,7 +183,9 @@ growproc(int n) {
 void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
     // mempages of child will only contain the swappedpages of parent
     // mempages of parent will be shared via their PTEs
-    to_p->num_of_mem_pages = from_p->num_of_swap_pages;
+    to_p->total_paged_outs=0;
+    to_p->total_page_faults=0;
+    to_p->num_of_mem_pages = from_p->num_of_swap_pages;// todo: read forum if bonus ?
     for (int i = 0; i < MAX_PSYC_PAGES; ++i) {
         to_p->mem_pages[i].va = from_p->swapped_pages[i].va;
         to_p->mem_pages[i].available = from_p->swapped_pages[i].available;
@@ -203,7 +205,8 @@ void copy_proc_page_data(struct proc* from_p, struct proc* to_p){
 
 void init_proc_page_data(struct proc* p){
     QueueInit(&p->mem_page_q);
-
+    p->total_paged_outs=0;
+    p->total_page_faults=0;
     p->num_of_swap_pages = 0;
     p->num_of_mem_pages = 0;
     for (int i = 0; i < MAX_PSYC_PAGES; i++) {
@@ -595,7 +598,13 @@ procdump(void) {
         else
             state = "???";
         // paging data
-        cprintf("%d %s %s %d %d", p->pid, state, p->name, p->num_of_mem_pages, p->num_of_swap_pages);        
+        #ifdef VERBOSE_PRINT_ON
+        cprintf("%d %s %s %d %d %d %d", p->pid, state, p->name, p->num_of_mem_pages, p->num_of_swap_pages
+            ,p->total_page_faults, p->total_paged_outs);        
+        #endif 
+        #ifdef VERBOSE_PRINT_OFF
+        cprintf("%d %s %s", p->pid, state, p->name);        
+        #endif
         if (p->state == SLEEPING) {
             getcallerpcs((uint *) p->context->ebp + 2, pc);
             for (i = 0; i < 10 && pc[i] != 0; i++)
@@ -603,4 +612,9 @@ procdump(void) {
         }
         cprintf("\n");
     }
+    #ifdef VERBOSE_PRINT_ON
+    int total_free_pages = PHYSTOP/PGSIZE;
+    int current_free_pages = getNumberOfFreePages();
+    cprintf("%d / %d free page frames in the system\n",current_free_pages ,total_free_pages);
+    #endif
 }

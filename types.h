@@ -28,3 +28,10 @@ struct queue
     int Queue[QUEUE_SIZE];
     int QueueIn, QueueOut;
 };
+#ifdef VERBOSE_PRINT
+#define VEBOSE_PRINT_VAL 0
+#endif
+
+#ifndef VERBOSE_PRINT
+#define VEBOSE_PRINT_VAL 1
+#endif

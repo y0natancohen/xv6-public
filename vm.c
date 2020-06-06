@@ -363,10 +363,8 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
 
     // update mem pages struct
     load_mem_page_entry_to_mem(page_fault_addr_rounded, ind_page_to_replace);
-//    myproc()->mem_pages[ind_page_to_replace].va = page_fault_addr_rounded;
-//    myproc()->mem_pages[ind_page_to_replace].available = 0;
-//    myproc()->mem_pages[ind_page_to_replace].nfu_counter = 0;
     QueuePut(ind_page_to_replace, &myproc()->mem_page_q);
+    myproc()->total_paged_outs++;
     myproc()->dont_touch_me = 0;
 
     // refresh TLB
@@ -422,14 +420,10 @@ void move_page_to_swap(uint new_page, pde_t *pgdir) {
     // *old_pte &= ~PTE_P;
     cprintf("ind_page_to_replace : %d\n", ind_page_to_replace);
     load_mem_page_entry_to_mem(new_page, ind_page_to_replace);
-//    myproc()->mem_pages[ind_page_to_replace].va = new_page;
-//    myproc()->mem_pages[ind_page_to_replace].available = 0;
-//    myproc()->mem_pages[ind_page_to_replace].nfu_counter = 0;
-
     myproc()->num_of_swap_pages += 1;
 
-//    cprintf("QueuePut of %d \n", ind_page_to_replace);
     QueuePut(ind_page_to_replace, &myproc()->mem_page_q);
+    myproc()->total_paged_outs++;
     myproc()->dont_touch_me = 0;
 
     // refresh TLB
@@ -800,11 +794,13 @@ void handle_page_fault(uint pgFaultAddr) {
     if (*pte & PTE_COW) {
         // cprintf("page fault: cow\n");
         handle_cow_fault(pgFaultAddr, myproc()->pgdir);
+        myproc()->total_page_faults++;
     }
 
     if (*pte & PTE_PG) {
         // cprintf("page fault: swap_pages\n");
         swap_pages(pgFaultAddr, myproc()->pgdir);
+        myproc()->total_page_faults++;
     }
 }
 

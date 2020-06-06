@@ -73,13 +73,11 @@ struct proc {
   //Swap file. must initiate with create swap file
   struct file *swapFile;      //page file
 
-
+  int total_paged_outs;
+  int total_page_faults;
   int num_of_mem_pages;             // No. of pages in physical memory
   int num_of_swap_pages;        // No. of pages in swap file
-//  struct freepg freepages[MAX_PSYC_PAGES];  // Pre-allocated space for the pages in physical memory linked list
   struct swapped_page swapped_pages[MAX_PSYC_PAGES];// Pre-allocated space for the pages in swap file array
-//  struct freepg *head;        // Head of the pages in physical memory linked list
-//  struct freepg *tail;        // End of the pages in physical memory linked list
   struct mem_page mem_pages[MAX_PSYC_PAGES];
   int dont_touch_me;
 
