@@ -279,8 +279,8 @@ fork(void) {
     if (!is_system_proc()){  // if there is a swap file to copy from
         copy_proc_page_data(curproc, np);
         createSwapFile(np);
-        if(copy_swap_file(curproc, np) < 0)
-            panic("failed to copy_swap_file in fork");
+//        if(copy_swap_file(curproc, np) < 0)
+//            panic("failed to copy_swap_file in fork");
     }
     //paging
 

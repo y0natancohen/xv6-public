@@ -51,7 +51,7 @@ void fork_cow_no_swap() {
             sleep(1);
             printf(1, "child data after change: %c\n", buf[i * 4096]);
         }
-
+        exit();
     } else {
         for (int i = 0; i < pages; i++) {
             sleep(1);
@@ -59,6 +59,7 @@ void fork_cow_no_swap() {
         }
         wait();
         printf(1, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFballoc\n");
+        free(buf);
     }
 }
 
@@ -86,7 +87,7 @@ void swap_no_fork() {
 
     printf(1, "calling free\n");
     // sleep(10);
-    // free(buf);
+     free(buf);
 }
 
 void nfu_test() {
@@ -165,7 +166,8 @@ void scfifo_test() {
 
 int main(int argc, char *argv[]) {
 //     fork_cow_no_swap();
-    swap_no_fork();
+     printf(1, "\n\n\n\n\n\n\n\n\n\n\n");
+     swap_no_fork();
 //    nfu_test();
 //    scfifo_test();
 //     fork_cow_with_swap(); // not working
