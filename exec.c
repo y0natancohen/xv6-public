@@ -109,8 +109,10 @@ exec(char *path, char **argv) {
 
     //paging
     // a shiny new swap file
-    removeSwapFile(curproc);
-    createSwapFile(curproc);
+    if (myproc() && !is_system_proc()){
+        removeSwapFile(curproc);
+        createSwapFile(curproc);
+    }
     //paging
 
     switchuvm(curproc);

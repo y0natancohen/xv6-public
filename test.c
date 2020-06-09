@@ -34,7 +34,9 @@ void fork_cow_with_swap() {
         printf(1, "father is waiting!!\n");
         wait();
         printf(1, "father is freeing!!\n");
-        free(buf);
+//        free(buf);
+        printf(1, "father is exiting!!\n");
+        exit();
     }
 }
 

@@ -11,7 +11,8 @@ int QueuePut(int x, struct queue* q)
 {
     if(q->QueueIn == (( q->QueueOut - 1 + QUEUE_SIZE) % QUEUE_SIZE))
     {
-        return -1; /* Queue Full*/
+//        panic("QueuePut: queue is full");
+        return -1;
     }
 
     q->Queue[q->QueueIn] = x;
@@ -134,7 +135,8 @@ int QueueGet(struct queue* q)
 {
     if(q->QueueIn == q->QueueOut)
     {
-        return -1; /* Queue Empty - nothing to get*/
+//        panic("QueueGet: queue is empty");
+        return -1;
     }
 
     int res = q->Queue[q->QueueOut];

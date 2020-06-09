@@ -378,7 +378,7 @@ wait(void) {
 
                 // paging
                 // cprintf("wait: init page data\n");
-                init_proc_page_data(p);
+//                init_proc_page_data(p);
                 // paging
 
                 release(&ptable.lock);
