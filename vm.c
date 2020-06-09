@@ -334,6 +334,7 @@ void swap_pages(uint page_fault_addr, pde_t *pgdir) {
     *old_pte &= ~PTE_COW;
     cprintf("swap_pages: page: %d with %d refs was swapped!, flags: %x\n",old_v_addr,refsToSwappedFile, PTE_FLAGS(*old_pte));
 
+
     int index_to_read_from = 0;
     char buf[PGSIZE];
     for (; index_to_read_from < MAX_PSYC_PAGES; index_to_read_from++) {
