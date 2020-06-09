@@ -3,12 +3,15 @@
 #include "user.h"
 
 void fork_cow_with_swap() {
-    int pages = 16;
+    int pages = 17;
     // printf(1, "asking for %d pages\n",pages);
     char *buf = malloc(4096 * pages);
     for (int i = 0; i < pages; i++) {
         buf[i * 4096] = 'a';
     }
+    sleep(20);
+    printf(1, "--------going to fork!!--------\n");
+    sleep(20);
     if (fork() == 0) {
         for (int i = 0; i < pages; i++) {
             printf(1, "child data: %c\n", buf[i * 4096]);
@@ -22,11 +25,16 @@ void fork_cow_with_swap() {
             printf(1, "child data after change: %c\n", buf[i * 4096]);
         }
 
+        printf(1, "child is exiting!!\n");
+        exit();
     } else {
         for (int i = 0; i < pages; i++) {
             printf(1, "father data: %c\n", buf[i * 4096]);
         }
+        printf(1, "father is waiting!!\n");
         wait();
+        printf(1, "father is freeing!!\n");
+        free(buf);
     }
 }
 
@@ -51,14 +59,17 @@ void fork_cow_no_swap() {
             sleep(1);
             printf(1, "child data after change: %c\n", buf[i * 4096]);
         }
-
+        printf(1, "child is exiting!!!!\n");
+        exit();
     } else {
         for (int i = 0; i < pages; i++) {
             sleep(1);
             printf(1, "father data: %c\n", buf[i * 4096]);
         }
+        printf(1, "father is waiting!!\n");
         wait();
         printf(1, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFballoc\n");
+        free(buf);
     }
 }
 
@@ -73,7 +84,7 @@ void simple_fork(){
 }
 
 void swap_no_fork() {
-    int pages = 26;
+    int pages = 20;
     // printf(1, "asking for %d pages\n",pages);
     char *buf = malloc(4096 * pages);
     for (int i = 0; i < pages; i++) {
@@ -84,9 +95,16 @@ void swap_no_fork() {
         printf(1, "data: %c\n", buf[i * 4096]);
     }
 
+    for (int i = 0; i < pages; i++) {
+        buf[i * 4096] = 'b';
+    }
+    printf(1, "good\n");
+    for (int i = 0; i < pages; i++) {
+        printf(1, "data: %c\n", buf[i * 4096]);
+    }
+
     printf(1, "calling free\n");
-    // sleep(10);
-    // free(buf);
+     free(buf);
 }
 
 void nfu_test() {
@@ -164,11 +182,13 @@ void scfifo_test() {
 
 
 int main(int argc, char *argv[]) {
-//     fork_cow_no_swap();
-    swap_no_fork();
+    printf(1, "\n\n\n\n\n\n\n");
+//    swap_no_fork();
+    printf(1, "\n\n\n\n\n\n\n");
+//    fork_cow_no_swap();
 //    nfu_test();
 //    scfifo_test();
-//     fork_cow_with_swap(); // not working
+     fork_cow_with_swap(); // not working
     // simple_fork();
     exit();
 }

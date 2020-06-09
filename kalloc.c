@@ -156,6 +156,19 @@ void update_num_of_refs(char *v, int update_value){
         release(&kmem.lock);
 }
 
+void set_num_of_refs(char *v, int update_value){
+    struct run *r;
+    if (kmem.use_lock)
+        acquire(&kmem.lock);
+
+    r = &kmem.run_arr[V2P(v)/PGSIZE];
+    r->ref_count = update_value;
+
+    if (kmem.use_lock)
+        release(&kmem.lock);
+}
+
+
 int get_num_of_refs(char *v){
   struct run *r = &kmem.run_arr[V2P(v)/PGSIZE];
   return r->ref_count;

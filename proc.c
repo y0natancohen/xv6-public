@@ -279,8 +279,8 @@ fork(void) {
     if (!is_system_proc()){  // if there is a swap file to copy from
         copy_proc_page_data(curproc, np);
         createSwapFile(np);
-        if(copy_swap_file(curproc, np) < 0)
-            panic("failed to copy_swap_file in fork");
+//        if(copy_swap_file(curproc, np) < 0)
+//            panic("failed to copy_swap_file in fork");
     }
     //paging
 
@@ -299,9 +299,14 @@ exit(void) {
     struct proc *curproc = myproc();
     struct proc *p;
     int fd;
+    cprintf("im in exit, pid: %d\n", myproc()->pid);
 
     if (curproc == initproc)
         panic("init exiting");
+    // paging
+    if (is_system_proc())
+        removeSwapFile(curproc);
+    // paging
 
     // Close all open files.
     for (fd = 0; fd < NOFILE; fd++) {
@@ -316,9 +321,6 @@ exit(void) {
     end_op();
     curproc->cwd = 0;
 
-    // paging
-    removeSwapFile(curproc);
-    // paging
 
     acquire(&ptable.lock);
 
@@ -336,6 +338,7 @@ exit(void) {
 
     // Jump into the scheduler, never to return.
     curproc->state = ZOMBIE;
+    cprintf("finished exit, pid: %d\n", myproc()->pid);
     sched();
     panic("zombie exit");
 }

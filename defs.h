@@ -84,6 +84,7 @@ void            kinit1(void*, void*);
 void            kinit2(void*, void*);
 int             getNumberOfFreePages(void);
 void update_num_of_refs(char *v, int update_value);
+void set_num_of_refs(char *v, int update_value);
 int get_num_of_refs(char *v);
 
 
