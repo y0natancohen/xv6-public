@@ -81,6 +81,8 @@ trap(struct trapframe *tf)
   case T_PGFLT:
     // cprintf("page fault raised\n");
     handle_page_fault(rcr2());
+    if (myproc()->killed)
+        exit();
     // cprintf("page fault handled\n");
     break;
   //PAGEBREAK: 13

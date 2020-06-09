@@ -43,7 +43,7 @@ void fork_cow_with_swap() {
 void fork_cow_no_swap() {
     int pages = 10;
     // printf(1, "asking for %d pages\n",pages);
-    char *buf = malloc(4096 * pages);
+    char *buf = sbrk(4096 * pages);
     for (int i = 0; i < pages; i++) {
         sleep(1);
         buf[i * 4096] = 'a';
@@ -71,7 +71,10 @@ void fork_cow_no_swap() {
         printf(1, "father is waiting!!\n");
         wait();
         printf(1, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFballoc\n");
-        free(buf);
+        printf(1, "father is freeing!!\n");
+//        free(buf);
+        sbrk(-(4096 * pages));
+        printf(1, "father is exiting!!\n");
     }
 }
 
@@ -88,7 +91,8 @@ void simple_fork(){
 void swap_no_fork() {
     int pages = 20;
     // printf(1, "asking for %d pages\n",pages);
-    char *buf = malloc(4096 * pages);
+//    char *buf = malloc(4096 * pages);
+    char *buf = sbrk(4096 * pages);
     for (int i = 0; i < pages; i++) {
         buf[i * 4096] = 'a';
     }
@@ -106,7 +110,7 @@ void swap_no_fork() {
     }
 
     printf(1, "calling free\n");
-     free(buf);
+    sbrk(-(4096 * pages));
 }
 
 void nfu_test() {
@@ -185,12 +189,12 @@ void scfifo_test() {
 
 int main(int argc, char *argv[]) {
     printf(1, "\n\n\n\n\n\n\n");
-//    swap_no_fork();
+    swap_no_fork();
     printf(1, "\n\n\n\n\n\n\n");
-//    fork_cow_no_swap();
+    fork_cow_no_swap();
 //    nfu_test();
 //    scfifo_test();
-     fork_cow_with_swap(); // not working
+//     fork_cow_with_swap(); // not working
     // simple_fork();
     exit();
 }

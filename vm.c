@@ -245,9 +245,6 @@ void handle_cow_fault(uint cow_fault_addr, pde_t *pgdir) {
             int free_i = find_next_available_mempage();
             myproc()->dont_touch_me = 1;
             load_mem_page_entry_to_mem(cow_fault_addr_rounded, free_i);
-//            myproc()->mem_pages[free_i].va = cow_fault_addr_rounded;
-//            myproc()->mem_pages[free_i].available = 0;
-//            myproc()->mem_pages[free_i].nfu_counter = 0;
             myproc()->num_of_mem_pages += 1;
             if (QueuePut(free_i, &myproc()->mem_page_q) == -1)
                 panic("QueuePut is -1 in handle cow fault");
@@ -531,9 +528,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
                 int free_i = find_next_available_mempage();
                 myproc()->dont_touch_me = 1;
                 load_mem_page_entry_to_mem(a, free_i);
-//                myproc()->mem_pages[free_i].va = a;
-//                myproc()->mem_pages[free_i].available = 0;
-//                myproc()->mem_pages[free_i].nfu_counter = 0;
                 myproc()->num_of_mem_pages += 1;
 
                 QueuePut(free_i, &myproc()->mem_page_q);
@@ -875,10 +869,16 @@ void handle_page_fault(uint pgFaultAddr) {
 //    print_process_mem_data(pgFaultAddr);
     cprintf("ref_count: %d\n", get_num_of_refs((void *) P2V(PTE_ADDR(*pte))));
 
-    if (pgFaultAddr >= KERNBASE)
+    if (pgFaultAddr >= KERNBASE){
         cprintf("pgFaultAddr : %d>= KERNBASE---------------------\n", pgFaultAddr);
-    if (!(*pte & PTE_U))
+        myproc()->killed = 1;
+        return;
+    }
+    if (!(*pte & PTE_U)){
         cprintf("pgFaultAddr : not user----------------\n", pgFaultAddr);
+        myproc()->killed = 1;
+        return;
+    }
 //    if (1) print_process_mem_data(0);
     if (*pte & PTE_COW) {
         // cprintf("page fault: cow\n");
