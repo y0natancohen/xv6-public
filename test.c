@@ -78,6 +78,7 @@ void fork_cow_no_swap() {
 void simple_fork(){
     if (fork() == 0) {
         printf(1, "child \n");
+        exit();
     } else {
         printf(1, "father \n");
         wait();
@@ -137,8 +138,8 @@ void nfu_test() {
             printf(1, "data: %c\n", buf[i * 4096]);
         }
     }
-    // sleep(10);
-    // free(buf);
+    sleep(10);
+    free(buf);
 }
 void scfifo_test() {
     int pages = 20;
@@ -178,19 +179,23 @@ void scfifo_test() {
 //            printf(1, "data: %c\n", buf[i * 4096]);
 //        }
 //    }
-    // sleep(10);
-    // free(buf);
+    sleep(10);
+    free(buf);
 }
 
 
 int main(int argc, char *argv[]) {
-    printf(1, "\n\n\n\n\n\n\n");
-//    swap_no_fork();
-    printf(1, "\n\n\n\n\n\n\n");
-//    fork_cow_no_swap();
-//    nfu_test();
-//    scfifo_test();
-     fork_cow_with_swap(); // not working
-    // simple_fork();
+    printf(1, "__________________________________________TEST1____________________________________\n");
+    swap_no_fork();
+    printf(1, "__________________________________________TEST2____________________________________\n");
+    fork_cow_no_swap();
+    printf(1, "__________________________________________TEST3____________________________________\n");
+    nfu_test();
+    printf(1, "__________________________________________TEST4____________________________________\n");
+    scfifo_test();
+    printf(1, "__________________________________________TEST5____________________________________\n");
+    fork_cow_with_swap(); 
+    printf(1, "__________________________________________TEST6____________________________________\n");
+    simple_fork();
     exit();
 }

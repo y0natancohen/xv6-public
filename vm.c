@@ -639,6 +639,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 // process size.  Returns the new process size.
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
+    #ifndef NONE
     pte_t *pte;
     uint a, pa;
 
@@ -671,6 +672,32 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         }
     }
     return newsz;
+    #endif
+    #ifdef NONE
+    
+    pte_t *pte;
+    uint a, pa;
+
+    if(newsz >= oldsz)
+        return oldsz;
+
+    a = PGROUNDUP(newsz);
+    for(; a  < oldsz; a += PGSIZE){
+        pte = walkpgdir(pgdir, (char*)a, 0);
+        if(!pte)
+        a = PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
+        else if((*pte & PTE_P) != 0){
+            pa = PTE_ADDR(*pte);
+            if(pa == 0)
+                panic("kfree");
+                char *v = P2V(pa);
+                kfree(v);
+                *pte = 0;
+            }
+    }
+
+    return newsz;
+    #endif
 }
 
 void clear_mem_page_entry(uint va){
@@ -875,8 +902,10 @@ void handle_page_fault(uint pgFaultAddr) {
 //    print_process_mem_data(pgFaultAddr);
     cprintf("ref_count: %d\n", get_num_of_refs((void *) P2V(PTE_ADDR(*pte))));
 
-    if (pgFaultAddr >= KERNBASE)
+    if (pgFaultAddr >= KERNBASE){
         cprintf("pgFaultAddr : %d>= KERNBASE---------------------\n", pgFaultAddr);
+        myproc()->killed =1;
+    }
     if (!(*pte & PTE_U))
         cprintf("pgFaultAddr : not user----------------\n", pgFaultAddr);
 //    if (1) print_process_mem_data(0);
