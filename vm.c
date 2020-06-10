@@ -878,7 +878,7 @@ void handle_page_fault(uint pgFaultAddr) {
     if (pgFaultAddr >= KERNBASE){
         cprintf("pgFaultAddr : %d>= KERNBASE---------------------\n", pgFaultAddr);
         myproc()->killed =1;
-        // return;
+        return;
     }
     if (!(*pte & PTE_U))
         cprintf("pgFaultAddr : not user----------------\n", pgFaultAddr);
