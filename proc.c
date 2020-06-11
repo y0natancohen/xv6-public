@@ -304,8 +304,8 @@ exit(void) {
     if (curproc == initproc)
         panic("init exiting");
     // paging
-    if (is_system_proc())
-        removeSwapFile(curproc);
+    // if (!is_system_proc())
+    //     removeSwapFile(curproc);
     // paging
 
     // Close all open files.
@@ -363,11 +363,11 @@ wait(void) {
                 // Found one.
                 pid = p->pid;
                 cprintf("proc.c kfree kstack\n");
-                    if(get_num_of_refs(p->kstack)>1) update_num_of_refs(p->kstack,-1);
-                    else{
-                        cprintf("freeing pid: %d kstack\n",p->pid);
+                    // if(get_num_of_refs(p->kstack)>1) update_num_of_refs(p->kstack,-1);
+                    // else{
+                        // cprintf("freeing pid: %d kstack\n",p->pid);
                          kfree(p->kstack);
-                    }
+                    // }
                 p->kstack = 0;
                 freevm(p->pgdir);
                 p->pid = 0;
