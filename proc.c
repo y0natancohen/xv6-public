@@ -362,18 +362,9 @@ wait(void) {
             if (p->state == ZOMBIE) {
                 // Found one.
                 pid = p->pid;
-                // cprintf("proc.c kfree kstack\n");
-                    // if(get_num_of_refs(p->kstack)>1) update_num_of_refs(p->kstack,-1);
-                    // else{
-                // if(is_system_proc()){
-                    cprintf("tahat pid: %d kstack: %d\n",p->pid, p->kstack);
-                    kfree(p->kstack);
-                // }
-                    // }
+                kfree(p->kstack);
                 p->kstack = 0;
-                // if(is_system_proc()){
-                    freevm(p->pgdir);
-                // }
+                freevm(p->pgdir);
                 p->pid = 0;
                 p->parent = 0;
                 p->name[0] = 0;
