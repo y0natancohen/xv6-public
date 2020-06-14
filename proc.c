@@ -299,7 +299,7 @@ exit(void) {
     struct proc *curproc = myproc();
     struct proc *p;
     int fd;
-    cprintf("im in exit, pid: %d\n", myproc()->pid);
+    // cprintf("im in exit, pid: %d\n", myproc()->pid);
 
     if (curproc == initproc)
         panic("init exiting");
@@ -338,7 +338,7 @@ exit(void) {
 
     // Jump into the scheduler, never to return.
     curproc->state = ZOMBIE;
-    cprintf("finished exit, pid: %d\n", myproc()->pid);
+    // cprintf("finished exit, pid: %d\n", myproc()->pid);
     sched();
     panic("zombie exit");
 }
@@ -362,14 +362,18 @@ wait(void) {
             if (p->state == ZOMBIE) {
                 // Found one.
                 pid = p->pid;
-                cprintf("proc.c kfree kstack\n");
+                // cprintf("proc.c kfree kstack\n");
                     // if(get_num_of_refs(p->kstack)>1) update_num_of_refs(p->kstack,-1);
                     // else{
-                        // cprintf("freeing pid: %d kstack\n",p->pid);
-                         kfree(p->kstack);
+                // if(is_system_proc()){
+                    cprintf("tahat pid: %d kstack: %d\n",p->pid, p->kstack);
+                    kfree(p->kstack);
+                // }
                     // }
                 p->kstack = 0;
-                freevm(p->pgdir);
+                // if(is_system_proc()){
+                    freevm(p->pgdir);
+                // }
                 p->pid = 0;
                 p->parent = 0;
                 p->name[0] = 0;
