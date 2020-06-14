@@ -156,7 +156,7 @@ int main(int argc, char *argv[]) {
         printf(1, "ass3Tests 3 (fork-cow with swap)\n");
         printf(1, "ass3Tests 4 (nfu test)\n");
         printf(1, "ass3Tests 5 (scfifo test)\n");
-        printf(1, "ass3Tests 6 (simple fork test, no malloc)\n");
+        printf(1, "ass3Tests 7 (simple fork test, no malloc)\n");
         printf(1, "\n\n");
     }
     else
